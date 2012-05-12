@@ -14,7 +14,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 #
-# Modified for Photograbber by Tommy Murphy, ourbunny.com
+# Modified for photograbber by Tommy Murphy, ourbunny.com
 
 """Python client library for the Facebook Platform.
 
@@ -29,6 +29,7 @@ import cgi
 import hashlib
 import time
 import urllib
+import logging
 
 # Find a JSON parser
 try:
@@ -71,11 +72,22 @@ class GraphAPI(object):
     get_user_from_cookie() method below to get the OAuth access token
     for the active user from the cookie saved by the SDK.
     """
+
     def __init__(self, access_token=None):
         self.access_token = access_token
+        self.logger = logging.getLogger('facebook')
 
     def get_object(self, id, limit=50):
-        """Fetchs the given object from the graph."""
+        """Get an entine object from the Graph API by paging over the requested
+        object until the entire object is retrieved.
+
+            graph = facebook.GraphAPI(access_token)
+            user = graph.get_object('me')
+            print user['id']
+
+        id: path to the object to retrieve
+        limit: number of objects to retrieve in each page
+        """
 
         data = []
         has_more = True
@@ -85,40 +97,41 @@ class GraphAPI(object):
         args["offset"] = 0
 
         while (has_more):
-            response = self.request(id, args)
+            self.logger.info('retieving: %s' % id)
+            response = self._request(id, args)
+
+            # TODO: find if this 'if no' is ever executed
             if not response.has_key('data'):
                 return response
+
             if len(response['data']) == 0:
                 has_more = False
             else:
+                self.logger.info('next page: %d' % len(data))
                 data.extend(response['data'])
                 args['offset'] = len(data)
 
         return data
 
-    def get_objects(self, ids, **args):
-        """Fetchs all of the given object from the graph.
 
-        We return a map from ID to object. If any of the IDs are invalid,
-        we raise an exception.
-        """
-        args["ids"] = ",".join(ids)
-        return self.request("", args)
+    def _request(self, path, args=None):
+        """Fetches the given path in the Graph API."""
 
-    def request(self, path, args=None):
-        """Fetches the given path in the Graph API.
-
-        We translate args to a valid query string.
-        """
         if not args: args = {}
         if self.access_token:
             args["access_token"] = self.access_token
 
-        file = urllib.urlopen("https://graph.facebook.com/" + path + "?" +
-                              urllib.urlencode(args))
+        path = ''.join(["https://graph.facebook.com/",
+                        path,
+                        "?",
+                        urllib.urlencode(args)])
+
+        self.logger.debug('GET: %s' % path)
+        file = urllib.urlopen(path)
 
         try:
             response = _parse_json(file.read())
+            self.logger.debug(json.dumps(response, indent=4))
         finally:
             file.close()
         if response.get("error"):
@@ -126,8 +139,11 @@ class GraphAPI(object):
                                 response["error"]["message"])
         return response
 
-    def fql(self, query):
-        """Provide a way to do FQL queries"""
+    def _fql_once(self, query):
+        """Execute an FQL query once.
+
+        query: properly formatted FQL query to execute
+        """
 
         query = urllib.quote(query)
         path = ''.join(['https://api.facebook.com/method/fql.query?',
@@ -135,9 +151,13 @@ class GraphAPI(object):
                         'query=%(q)s&',
                         'access_token=%(at)s'])
         args = { "q" : query, "at" : self.access_token, }
-        file = urllib.urlopen(path % args)
+        path = path % args
+
+        self.logger.debug('GET: %s' % path)
+        file = urllib.urlopen(path)
         try:
             response = _parse_json(file.read())
+            self.logger.debug(json.dumps(response, indent=4))
             if type(response) is dict and "error_code" in response:
                 raise GraphAPIError(response["error_code"],
                                     response["error_msg"])
@@ -147,16 +167,36 @@ class GraphAPI(object):
             file.close()
         return response
 
+    def fql(self, query, n=10, standoff=1.1):
+        """Execute an FQL query.  Repeats on failure.
+
+        query: properly formatted FQL query to execute
+        n: retry the call <n> times before raising an error
+        standoff: multiplier increment for each standoff
+        """
+
+        retries = 0
+        while True:
+            try:
+                return self._fql_once(query)
+            except Exception, e:
+                self.logger.debug('query failed')
+                if retries < n:
+                    retries += 1
+                    time.sleep(retries * standoff)
+                else:
+                    raise
+
 class GraphAPIError(Exception):
     def __init__(self, type, message):
         Exception.__init__(self, message)
         self.type = type
 
- ### PhotoGrabber Additions ###
+### photograbber Additions ###
 
 import webbrowser
 
-CLIENT_ID = "139730900025" # old_id: "227fe70470173eca69e4b38b6518fbfda"
+CLIENT_ID = "139730900025"
 RETURN_URL = "http://faceauth.appspot.com/"
 SCOPE = ''.join(['user_photo_video_tags,',
                  'friends_photo_video_tags,',
