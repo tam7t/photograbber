@@ -26,18 +26,23 @@ def main():
     parser.add_argument('--token', help='Specify the OAuth token used to authenticate with Facebook.')
     parser.add_argument('--list-targets', choices=('me','friends','pages','following','all'), help='Display names and object_id\'s of potential targets')
     parser.add_argument('--list-albums', nargs='+', help='List the albums uploaded by a target.  Separate the object_id\'s of targets with spaces.')
-    parser.add_argument('--target', nargs='+', help='Download targets. Separate the object_id\'s of targets with spaces.')
+    parser.add_argument('--target', nargs='+', help='Download targets. Separate the object_id\'s of people or pages with spaces.')
     parser.add_argument('-c', action='store_true', help='Download comments. (Use with --target)')
     parser.add_argument('-a', action='store_true', help='Download full album. (Use with --target)')
     parser.add_argument('-u', action='store_true', help='Download identity\'s albums. (Use with --target)')
     parser.add_argument('-t', action='store_true', help='Download identity\'s tagged photos. (Use with --target)')
     parser.add_argument('--album', nargs='+', help='Download full albums.  Separate the object_id\'s of the albums with spaces.')
-    parser.add_argument('--debug', action='store_true', help='Log extra debug information to pg.log')
+    parser.add_argument('--dir', help='Specify the directory to store the downloaded information. (Use with --target or --album)')
+    parser.add_argument('--debug', choices=('info','debug'), help='Log extra debug information to pg.log')
 
     args = parser.parse_args()
 
     # setup logging
-    if args.debug:
+    if args.debug == 'info':
+        logging.basicConfig(filename='pg.log',
+                            filemode='w',
+                            level=logging.INFO)
+    elif args.debug == 'debug':
         logging.basicConfig(filename='pg.log',
                             filemode='w',
                             level=logging.DEBUG)
@@ -89,7 +94,9 @@ def main():
                 print ('%(id)s:"%(name)s"' % album).encode('utf-8')
         return
 
-    # TODO: find out directory to download to
+    # TODO: find a directory to store downloads
+    if args.dir is None:
+        args.dir = raw_input("Download Directory: ")
 
     # --album <object_id 1> ... <object_id n>
     # TODO: write method to download an album
@@ -97,6 +104,11 @@ def main():
     # --target <object_id 1> ... <object_id n>
     # TODO: write method to download person/page
 
+
+    # everything below this can be deleted once album and target are completed
+    #
+    #
+    #
     # Download Potential Targets
     if args.identity is None:
         print "Finding Friends..."

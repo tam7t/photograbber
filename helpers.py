@@ -18,7 +18,7 @@
 import logging
 
 class Helper(object):
-    """Helper functions for retrieving Facebook Data
+    """Helper functions for retrieving Facebook data.
 
     Example usage:
         import facebook
@@ -33,7 +33,7 @@ class Helper(object):
         helper.get_tagged(id)
         helper.get_tagged_albums(id)
 
-    the id field in all cases is the id of the target for backup.
+    The id field in all cases is the id of the target for backup.
     """
 
     def __init__(self, graph=None):
@@ -42,7 +42,7 @@ class Helper(object):
 
     def find_album_id(self, picture_id):
         """Find the album that contains a picture.
-        
+
         The picture_id arguement must be the object_id of a photo.
 
         Returns the object_id of the album.
@@ -62,7 +62,7 @@ class Helper(object):
 
     def find_album_photos(self, album_id):
         """Find all photos in an album.
-           
+
         The album_id arguement must be the object_id of an album.
 
         Returns a list of photos in the form:
@@ -95,17 +95,62 @@ class Helper(object):
     # { '<album object id>': {'<picture id>':<data>, ...}, ...}
 
     def get_albums(self, id):
+        """Get all albums uploaded by id"""
+        data = self.graph.get_object('%s/albums' % id, 100)
+        data['comments'] = self.graph.get_object('%s/comments' % data['id'])
+
         # does not follow comments and likes paging
-        return self.graph.get_object('%s/albums' % id, 100)
+        return data
 
     def get_tagged(self, id):
-        unsorted = self.graph.get_object('%s/photos' % id, 100)
+        """Get all photos where argument id is tagged"""
+
+        unsorted = self.graph.get_object('%s/photos' % id, 5000)
         # must follow comments and likes paging...
+        data = {}
         while len(unsorted) > 0:
+            self.logger.info('len(unsorted) = %d' % len(unsorted))
+
             aid = '%s' % find_album(unsorted[0]['id'])
-            data[aid] = self.graph.get_object(aid, 100)
+            # get album info
+            data[aid] = self.graph.get_object('%s' % aid, 100)
+            data[aid]['comments'] = self.graph.get_object('%s/comments' % aid, 100)
+            # get list of photos
+            photos = self.graph.get_object('%s/photos' % aid, 100)
+            # get list of photo id's
+            photo_ids = [x['id'] for x in photos]
+            # only add photos from unsorted to list
+            data[aid]['photos'] = [x for x in unsorted if x['id'] in photo_ids]
+            # get each photo's comments
+            for photo in data[aid]['photos']:
+                photo['comments'] = self.graph.get_object('%s/comments' % photo['id'])
+            # remove  from unsorted
+            unsorted = [x for x in unsorted if x['id'] not in photo_ids]
+
+        return data
 
     def get_tagged_albums(self, id):
-        return
+        """Get all photos from all albums where argument id is tagged"""
 
+        unsorted = self.graph.get_object('%s/photos' % id, 5000)
+        # must follow comments and likes paging...
+        data = {}
+        while len(unsorted) > 0:
+            self.logger.info('len(unsorted) = %d' % len(unsorted))
+
+            aid = '%s' % find_album(unsorted[0]['id'])
+            # get album info
+            data[aid] = self.graph.get_object('%s' % aid, 100)
+            data[aid]['comments'] = self.graph.get_object('%s/comments' % aid, 100)
+            # get list of photos
+            data[aid]['photos'] = self.graph.get_object('%s/photos' % aid, 100)
+            # get each photo's comments
+            for photo in data[aid]['photos']:
+                photo['comments'] = self.graph.get_object('%s/comments' % photo['id'])
+            # get list of photo id's
+            photo_ids = [x['id'] for x in data[aid]['photos']]
+            # remove  from unsorted
+            unsorted = [x for x in unsorted if x['id'] not in photo_ids]
+
+        return data
 
