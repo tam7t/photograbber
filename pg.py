@@ -66,7 +66,7 @@ def main():
     # --list-targets {'me','friends','pages','following','all'}
     target_list = []
     if args.list_targets == 'me':
-        my_info = graph.get_object('me')
+        my_info = helper.get_me()
         target_list.append(my_info)
     elif args.list_targets == 'friends':
         target_list.extend(helper.get_friends('me'))
@@ -75,7 +75,7 @@ def main():
     elif args.list_targets == 'following':
         target_list.extend(helper.get_subscriptions('me'))
     elif args.list_targets == 'all':
-        my_info = graph.get_object('me')
+        my_info = graph.get_me()
         target_list.append(my_info)
         target_list.extend(helper.get_friends('me'))
         target_list.extend(helper.get_pages('me'))
@@ -89,7 +89,7 @@ def main():
     # --list_albums <object_id 1> ... <object_id n>
     if args.list_albums is not None:
         for target in args.list_albums:
-            album_list = helper.get_albums(target)
+            album_list = helper.get_album_list(target)
             for album in album_list:
                 print ('%(id)s:"%(name)s"' % album).encode('utf-8')
         return
@@ -99,10 +99,20 @@ def main():
         args.dir = raw_input("Download Directory: ")
 
     # --album <object_id 1> ... <object_id n>
-    # TODO: write method to download an album
+    for album in args.album:
+        data = helper.get_album(album)
 
     # --target <object_id 1> ... <object_id n>
-    # TODO: write method to download person/page
+    for target in args.target:
+        # if user album
+        data = helper.get_albums(target)
+        # if tagged
+        data = helper.get_tagged(target, full=False)
+        # if tagged and full albums
+        data = helper.get_tagged(target, full=True)
+
+    # save data to a file
+    # download files from each album
 
 
     # everything below this can be deleted once album and target are completed
