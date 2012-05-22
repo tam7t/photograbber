@@ -103,6 +103,12 @@ class Helper(object):
     # returns [{album_1}, ..., {album_n} ]
     # where album_n = {'id':<id>, 'comments':[<>], 'photos':[<>], ... }
 
+    # note: there is a potential for optimization of comments
+    #   only download comments if
+    #       1) we want comments
+    #       2) if comments already exists
+    #       3) follow comment paging, instead of re-getting all
+
     def get_album(self, id):
         """Get a single album"""
         data = self.graph.get_object('%s' % id)
