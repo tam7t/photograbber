@@ -109,28 +109,28 @@ class Helper(object):
     #       2) if comments already exists
     #       3) follow comment paging, instead of re-getting all
 
-    def get_album(self, id):
+    def get_album(self, id, comments=False):
         """Get a single album"""
         data = self.graph.get_object('%s' % id)
         # get comments
-        if 'comments' in album:
+        if comments and 'comments' in album:
             album['comments'] = self.graph.get_object('%s/comments' % album['id'])
         # get album photos
         album['photos'] = self.graph.get_object('%s/photos' % album['id'])
         for photo in album['photos']:
             # get picture comments
-            if 'comments' in photo:
+            if comments and 'comments' in photo:
                 photo['comments'] = self.graph.get_object('%s/comments' % photo['id'])
         return data
 
-    def get_albums(self, id):
+    def get_albums(self, id, comments=False):
         """Get all albums uploaded by id"""
         data = self.graph.get_object('%s/albums' % id, 100)
         for album in data:
-            album = self.get_album(album['id'])
+            album = self.get_album(album['id'], comments)
         return data
 
-    def get_tagged(self, id, full=True):
+    def get_tagged(self, id, comments=False, full=True):
         """Get all photos where argument id is tagged.
 
            id: the object_id of target
@@ -145,7 +145,7 @@ class Helper(object):
             self.logger.info('len(unsorted) = %d' % len(unsorted))
 
             aid = '%s' % find_album(unsorted[0]['id'])
-            album = self.get_album(aid)
+            album = self.get_album(aid, comments)
             photo_ids = [x['id'] for x in album['photos']]
             unsorted = [x for x in unsorted if x['id'] not in photo_ids]
             if not full:

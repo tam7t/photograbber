@@ -28,14 +28,16 @@ def main():
     parser.add_argument('--list-albums', nargs='+', help='List the albums uploaded by a target.  Separate the object_id\'s of targets with spaces.')
     parser.add_argument('--target', nargs='+', help='Download targets. Separate the object_id\'s of people or pages with spaces.')
     parser.add_argument('-c', action='store_true', help='Download comments. (Use with --target)')
-    parser.add_argument('-a', action='store_true', help='Download full album. (Use with --target)')
-    parser.add_argument('-u', action='store_true', help='Download identity\'s albums. (Use with --target)')
-    parser.add_argument('-t', action='store_true', help='Download identity\'s tagged photos. (Use with --target)')
+    parser.add_argument('-a', action='store_true', help='Download full album, even if just 1 photo has the tagged target. (Use with --target)')
+    parser.add_argument('-u', action='store_true', help='Download all albums uploaded by the targets. (Use with --target)')
+    parser.add_argument('-t', action='store_true', help='Download all photos with the target tagged. (Use with --target)')
     parser.add_argument('--album', nargs='+', help='Download full albums.  Separate the object_id\'s of the albums with spaces.')
     parser.add_argument('--dir', help='Specify the directory to store the downloaded information. (Use with --target or --album)')
     parser.add_argument('--debug', choices=('info','debug'), help='Log extra debug information to pg.log')
 
     args = parser.parse_args()
+
+    import pdb;pdb.set_trace()
 
     # setup logging
     if args.debug == 'info':
@@ -94,93 +96,61 @@ def main():
                 print ('%(id)s:"%(name)s"' % album).encode('utf-8')
         return
 
-    # TODO: find a directory to store downloads
+    # -- dir
     if args.dir is None:
-        args.dir = raw_input("Download Directory: ")
+        current_dir = os.getcwd()
+        args.dir = raw_input("Download Locationi [%s]: " % current_dir)
+        if args.dir = '':
+            args.dir = current_dir
 
     # --album <object_id 1> ... <object_id n>
-    for album in args.album:
-        data = helper.get_album(album)
+    if args.album is not None:
+        for album in args.album:
+            data = helper.get_album(album)
+        # download data
+        return
 
     # --target <object_id 1> ... <object_id n>
+    if args.target is None:
+        args.target = []
+        args.target.append(raw_input("Target: "))
+
+    # get options
+    if args.c is False and args.a is False:
+        if args.u is False and args.t is False:
+            opt_str = raw_input("input options (e.g. 'cau' or 'caut'):")
+            if 'c' in opt_str:
+                args.c = True
+            if 'a' in opt_str:
+                args.a = True
+            if 'u' in opt_str:
+                args.u = True
+            if 't' in opt_str:
+                args.t = True
+
+    # process each target
     for target in args.target:
-        # if user album
-        data = helper.get_albums(target)
-        # if tagged
-        data = helper.get_tagged(target, full=False)
-        # if tagged and full albums
-        data = helper.get_tagged(target, full=True)
+        data = []
 
-    # save data to a file
-    # download files from each album
+        # get user uploaded photos
+        if args.u:
+            u_data = helper.get_albums(target, comments=args.c)
 
+        # get tagged
+        if args.t:
+            t_data = helper.get_tagged(target, comments=args.c, full=args.a)
 
-    # everything below this can be deleted once album and target are completed
-    #
-    #
-    #
-    # Download Potential Targets
-    if args.identity is None:
-        print "Finding Friends..."
-        friends = graph.get_object('me/friends', 5000)
+        for user_album in u_data:
+            added = False
+            # will the album be added from t_data?
+            for tagged_album in t_data:
+                if tagged_album['id'] == user_album['id']:
+                    added = True
+            if not added:
+                data.append(user_album)
+        data.extend(t_data)
 
-        print "Finding Subscriptions..."
-        subscriptions = graph.get_object('me/subscribedto', 5000)
-
-        print "Finding Likes..."
-        likes = graph.get_object('me/likes', 5000)
-
-        # Identify which ones id's target
-        args.identity = []
-        a = True
-        while a :
-            b = raw_input("target identity: ")
-            if (b == ""):
-                a = False
-            else:
-                args.identity.append(b)
-
-    # Get All info
-    for id in args.identity:
-        data = {}
-        try:
-            # all tagged photos
-            print "Retrieving Tagged Photo Info..."
-            unsorted = graph.get_object('%s/photos' % id, 100)
-            print "total: %d" % len(unsorted)
-
-            # sort into albums
-            # this needs work...
-            while len(unsorted) > 0:
-                aid = '%s' % find_album(unsorted[0]['id'], graph)
-                data[aid] = graph.get_object(aid, 100)
-                pids = find_album_photos(aid, graph)
-
-                oids = []
-                for pid in pids:
-                    oids.append('%s' % pid['object_id'])
-
-                partial_sort = [pic for pic in unsorted if pic['id'] in oids]
-                print len(partial_sort)
-                data[aid]['photos'] = partial_sort
-                unsorted = [pic for pic in unsorted if not pic['id'] in oids]
-
-            # all uploaded albums
-            print "Retrieving Album Info..."
-            owner_albums = graph.get_object('%s/albums' % id, 100)
-            print "total: %d" % len(albums)
-
-            # all photos from an album
-            for album in owner_albums:
-                print "Album %s" % album['id']
-                photos = graph.get_object('%s/photos' % album['id'], 100)
-                print "total: %d" % len(data)
-
-            # the actual download
-            # the safe the metadata
-
-        except Exception, e:
-            raise
+        # download data
 
 if __name__ == "__main__":
     main()
