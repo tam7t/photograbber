@@ -166,6 +166,14 @@ def main():
         data.extend(t_data)
 
         # download data
+        try:
+            pics = 0
+            for album in data:
+                pics = pics + len(album['photos'])
+            logger.info('albums: %s' % len(data))
+            logger.info('pics: %s' % pics)
+        except Exception, e:
+            import pdb;pdb.set_trace()
 
 if __name__ == "__main__":
     main()

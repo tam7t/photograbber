@@ -45,7 +45,8 @@ class Helper(object):
 
         The picture_id arguement must be the object_id of a photo.
 
-        Returns the object_id of the album.
+        Returns the object_id of the album or '0' if the album cannot be
+        retrieved.
         """
 
         q = ''.join(['SELECT object_id, aid FROM album WHERE aid ',
@@ -59,7 +60,6 @@ class Helper(object):
             self.logger.error('%s' % q)
             self.logger.error('No object_id found (photo): %s' % picture_id)
             self.logger.error('Response: %s' % data)
-            # TODO: handle this, when album data is not available
             return '0'
 
     def find_album_photos(self, album_id):
@@ -116,7 +116,21 @@ class Helper(object):
 
         self.logger.info('begin get_album: %s' % id)
 
-        album = self.graph.get_object('%s' % id)
+        # handle special case, when PG does not have permissions to get info on
+        # the album, but can see the photo
+        if id == 0 or id == '0':
+            album= {}
+            album['id'] = '0'
+            album['name'] = 'Unknown'
+            album['comments'] = []
+            album['photos'] = []
+            return album
+
+        try:
+            album = self.graph.get_object('%s' % id)
+        except Exception, e:
+            import pdb;pdb.set_trace()
+
         # get comments
         if comments and 'comments' in album:
             album['comments'] = self.graph.get_object('%s/comments' % album['id'])
@@ -141,8 +155,8 @@ class Helper(object):
     def get_tagged(self, id, comments=False, full=True):
         """Get all photos where argument id is tagged.
 
-           id: the object_id of target
-           full: get all photos from all album the user is tagged in
+        id: the object_id of target
+        full: get all photos from all album the user is tagged in
         """
 
         self.logger.info('begin get_tagged: %s' % id)
@@ -150,18 +164,42 @@ class Helper(object):
         unsorted = self.graph.get_object('%s/photos' % id, 5000)
         unsorted_ids = [x['id'] for x in unsorted]
 
+        # holder album for special case
+        empty_album = self.get_album(0, comments)
+        empty_album_n = 0
+
+        aids = []
+
         data = []
         while len(unsorted) > 0:
             self.logger.info('len(unsorted) = %d' % len(unsorted))
 
             aid = '%s' % self.find_album_id(unsorted[0]['id'])
+
+            try:
+                temp = aids.index(aid)
+                self.logger.error('%s already in aids' % aid)
+            except Exception,e:
+                aids.append(aid)
+
             album = self.get_album(aid, comments)
-            photo_ids = [x['id'] for x in album['photos']]
-            unsorted = [x for x in unsorted if x['id'] not in photo_ids]
-            if not full:
-                # limit album to only those 
-                photos = [x for x in unsorted if x['id'] in photo_ids]
-                album['photos'] = photos
-            data.append(album)
+
+            # aid = '0' special case:
+            #   album will not have any 'photos' so we must force it
+            if aid == '0':
+                empty_album_n = empty_album_n + 1
+                if empty_album_n == 0:
+                    data.append(empty_album)
+                empty_album['photos'].append(unsorted[0])
+                unsorted.remove(unsorted[0])
+            else:
+                # remove id's from unsorted that are in the album
+                photo_ids = [x['id'] for x in album['photos']]
+                unsorted = [x for x in unsorted if x['id'] not in photo_ids]
+                # limit album to only those in unsorted
+                if not full:
+                    photos = [x for x in unsorted if x['id'] in photo_ids]
+                    album['photos'] = photos
+                data.append(album)
 
         return data

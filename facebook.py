@@ -98,6 +98,7 @@ class GraphAPI(object):
 
         while (has_more):
             self.logger.info('retieving: %s' % id)
+
             response = self._request(id, args)
 
             # TODO: find if this 'if no' is ever executed
@@ -106,7 +107,7 @@ class GraphAPI(object):
 
             if len(response['data']) < limit:
                 data.extend(response['data'])
-                self.logger.info('data size: %d' % len(data))
+                self.logger.info('elements: %d' % len(data))
                 has_more = False
             else:
                 data.extend(response['data'])
@@ -115,7 +116,7 @@ class GraphAPI(object):
         return data
 
 
-    def _request(self, path, args=None):
+    def _request_once(self, path, args=None):
         """Fetches the given path in the Graph API."""
 
         if not args: args = {}
@@ -140,6 +141,28 @@ class GraphAPI(object):
                                 response["error"]["message"])
         return response
 
+    def _request(self, path, args=None, n=10, standoff=1.5):
+        """Execute a Graph request.  Repeats on failure.
+
+        path: properly formatted path in the Graph API
+        args: list of extra arguments, 'limit' and 'offset'
+        n: retry the call <n> times before raising an error
+        standoff: multiplier increment for each standoff
+        """
+
+        retries = 0
+        while True:
+            try:
+                return self._request_once(path, args)
+            except Exception, e:
+                self.logger.error('path request failed: %s' % path)
+                self.logger.error('args = %s' % args)
+                if retries < n:
+                    retries += 1
+                    time.sleep(retries * standoff)
+                else:
+                    raise
+
     def _fql_once(self, query):
         """Execute an FQL query once.
 
@@ -163,12 +186,13 @@ class GraphAPI(object):
                 raise GraphAPIError(response["error_code"],
                                     response["error_msg"])
         except Exception, e:
+            # pass exception up!
             raise e
         finally:
             file.close()
         return response
 
-    def fql(self, query, n=10, standoff=1.1):
+    def fql(self, query, n=10, standoff=1.5):
         """Execute an FQL query.  Repeats on failure.
 
         query: properly formatted FQL query to execute
