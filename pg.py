@@ -20,24 +20,31 @@ import helpers
 import argparse
 import time
 import logging
+import os
 
 def main():
+
+    # help strings
+    c_help = 'Download comments. (Use with --target)'
+    a_help = 'Download full album, even if just 1 photo has the tagged target. (Use with --target)'
+    u_help = 'Download all albums uploaded by the targets. (Use with --target)'
+    t_help = 'Download all photos with the target tagged. (Use with --target)'
+
+    # parse arguements
     parser = argparse.ArgumentParser(description="Download Facebook photos.")
     parser.add_argument('--token', help='Specify the OAuth token used to authenticate with Facebook.')
     parser.add_argument('--list-targets', choices=('me','friends','pages','following','all'), help='Display names and object_id\'s of potential targets')
     parser.add_argument('--list-albums', nargs='+', help='List the albums uploaded by a target.  Separate the object_id\'s of targets with spaces.')
     parser.add_argument('--target', nargs='+', help='Download targets. Separate the object_id\'s of people or pages with spaces.')
-    parser.add_argument('-c', action='store_true', help='Download comments. (Use with --target)')
-    parser.add_argument('-a', action='store_true', help='Download full album, even if just 1 photo has the tagged target. (Use with --target)')
-    parser.add_argument('-u', action='store_true', help='Download all albums uploaded by the targets. (Use with --target)')
-    parser.add_argument('-t', action='store_true', help='Download all photos with the target tagged. (Use with --target)')
+    parser.add_argument('-c', action='store_true', help=c_help)
+    parser.add_argument('-a', action='store_true', help=a_help)
+    parser.add_argument('-u', action='store_true', help=u_help)
+    parser.add_argument('-t', action='store_true', help=t_help)
     parser.add_argument('--album', nargs='+', help='Download full albums.  Separate the object_id\'s of the albums with spaces.')
     parser.add_argument('--dir', help='Specify the directory to store the downloaded information. (Use with --target or --album)')
     parser.add_argument('--debug', choices=('info','debug'), help='Log extra debug information to pg.log')
 
     args = parser.parse_args()
-
-    import pdb;pdb.set_trace()
 
     # setup logging
     if args.debug == 'info':
@@ -99,14 +106,15 @@ def main():
     # -- dir
     if args.dir is None:
         current_dir = os.getcwd()
-        args.dir = raw_input("Download Locationi [%s]: " % current_dir)
-        if args.dir = '':
+        args.dir = raw_input("Download Location [%s]: " % current_dir)
+        if args.dir == '':
             args.dir = current_dir
 
     # --album <object_id 1> ... <object_id n>
     if args.album is not None:
         for album in args.album:
-            data = helper.get_album(album)
+            # note, doesnt manually ask for caut options for album
+            data = helper.get_album(album, comments=args.c)
         # download data
         return
 
@@ -118,7 +126,14 @@ def main():
     # get options
     if args.c is False and args.a is False:
         if args.u is False and args.t is False:
-            opt_str = raw_input("input options (e.g. 'cau' or 'caut'):")
+            print ''
+            print 'Options'
+            print '-------'
+            print 'c: %s' % c_help
+            print 'a: %s' % a_help
+            print 'u: %s' % u_help
+            print 't: %s' % t_help
+            opt_str = raw_input("Input Options (e.g. 'cau' or 'caut'):")
             if 'c' in opt_str:
                 args.c = True
             if 'a' in opt_str:

@@ -104,10 +104,11 @@ class GraphAPI(object):
             if not response.has_key('data'):
                 return response
 
-            if len(response['data']) == 0:
+            if len(response['data']) < limit:
+                data.extend(response['data'])
+                self.logger.info('data size: %d' % len(data))
                 has_more = False
             else:
-                self.logger.info('next page: %d' % len(data))
                 data.extend(response['data'])
                 args['offset'] = len(data)
 
@@ -180,7 +181,7 @@ class GraphAPI(object):
             try:
                 return self._fql_once(query)
             except Exception, e:
-                self.logger.debug('query failed')
+                self.logger.error('query failed: %s' % query)
                 if retries < n:
                     retries += 1
                     time.sleep(retries * standoff)

@@ -56,8 +56,10 @@ class Helper(object):
         if len(data) == 1:
             return data[0]['object_id']
         else:
+            self.logger.error('%s' % q)
             self.logger.error('No object_id found (photo): %s' % picture_id)
             self.logger.error('Response: %s' % data)
+            # TODO: handle this, when album data is not available
             return '0'
 
     def find_album_photos(self, album_id):
@@ -111,20 +113,26 @@ class Helper(object):
 
     def get_album(self, id, comments=False):
         """Get a single album"""
-        data = self.graph.get_object('%s' % id)
+
+        self.logger.info('begin get_album: %s' % id)
+
+        album = self.graph.get_object('%s' % id)
         # get comments
         if comments and 'comments' in album:
             album['comments'] = self.graph.get_object('%s/comments' % album['id'])
         # get album photos
-        album['photos'] = self.graph.get_object('%s/photos' % album['id'])
+        album['photos'] = self.graph.get_object('%s/photos' % album['id'],500)
         for photo in album['photos']:
             # get picture comments
             if comments and 'comments' in photo:
                 photo['comments'] = self.graph.get_object('%s/comments' % photo['id'])
-        return data
+        return album
 
     def get_albums(self, id, comments=False):
         """Get all albums uploaded by id"""
+
+        self.logger.info('begin get_albums: %s' % id)
+
         data = self.graph.get_object('%s/albums' % id, 100)
         for album in data:
             album = self.get_album(album['id'], comments)
@@ -137,6 +145,8 @@ class Helper(object):
            full: get all photos from all album the user is tagged in
         """
 
+        self.logger.info('begin get_tagged: %s' % id)
+
         unsorted = self.graph.get_object('%s/photos' % id, 5000)
         unsorted_ids = [x['id'] for x in unsorted]
 
@@ -144,7 +154,7 @@ class Helper(object):
         while len(unsorted) > 0:
             self.logger.info('len(unsorted) = %d' % len(unsorted))
 
-            aid = '%s' % find_album(unsorted[0]['id'])
+            aid = '%s' % self.find_album_id(unsorted[0]['id'])
             album = self.get_album(aid, comments)
             photo_ids = [x['id'] for x in album['photos']]
             unsorted = [x for x in unsorted if x['id'] not in photo_ids]
