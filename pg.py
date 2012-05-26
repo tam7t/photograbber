@@ -147,12 +147,16 @@ def main():
     for target in args.target:
         data = []
 
+        u_data = []
         # get user uploaded photos
         if args.u:
+            print 'Retrieving %s\'s albums...' % target
             u_data = helper.get_albums(target, comments=args.c)
 
+        t_data = []
         # get tagged
         if args.t:
+            print 'Retrieving %s\'s tagged photos...' % target
             t_data = helper.get_tagged(target, comments=args.c, full=args.a)
 
         for user_album in u_data:
@@ -172,6 +176,7 @@ def main():
                 pics = pics + len(album['photos'])
             logger.info('albums: %s' % len(data))
             logger.info('pics: %s' % pics)
+            logger.info('rtt: %d' % graph.get_stats())
         except Exception, e:
             import pdb;pdb.set_trace()
 

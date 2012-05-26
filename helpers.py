@@ -46,29 +46,37 @@ class Helper(object):
         # pull photos from albums
         # pull comments & likes
 
-    def find_album_id(self, picture_id):
-        """Find the album that contains a picture.
+    def find_album_ids(self, picture_ids):
+        """Find the albums that contains pictures.
 
-        The picture_id arguement must be the object_id of a photo.
+        The picture_id arguement must be a list of photo object_id's.
 
-        Returns the object_id of the album or '0' if the album cannot be
-        retrieved.
+        Returns a list of album object_id's.  If permissions for the album do
+        not allow for album information to be retrieved then it is omitted from
+        the list.
         """
 
-        # TODO: allow picture_id's to be a list
-
         q = ''.join(['SELECT object_id, aid FROM album WHERE aid ',
-                     'IN (SELECT aid FROM photo WHERE object_id=%s)'])
-        data = self.graph.fql(q % picture_id)
+                     'IN (SELECT aid FROM photo WHERE object_id IN (%s))'])
 
-        # TODO: verify data response when photo_id does not exist
-        if len(data) == 1:
-            return data[0]['object_id']
-        else:
-            self.logger.error('%s' % q)
-            self.logger.error('No object_id found (photo): %s' % picture_id)
-            self.logger.error('Response: %s' % data)
-            return '0'
+        ids = []
+
+        # split query into 25 pictures at a time
+        for i in range(len(picture_ids) / 25 + 1):
+            pids = ','.join(picture_ids[i * 25:(i+1) * 25])
+            new_ids = self.graph.fql(q % pids)
+            try:
+                new_ids = [x['object_id'] for x in new_ids]
+            except Exception,e:
+                self.logger.error('no album access')
+                self.logger.error('%s' % e)
+                bad_query = q % pids
+                self.logger.error('query: %s' % bad_query)
+                new_ids = []
+
+            ids = list(set(ids+new_ids))
+
+        return ids
 
     # The following methods return a list of object id <> friend
     # [ {'id':<id>, 'name':<name>}, ... ]
@@ -100,6 +108,28 @@ class Helper(object):
     #       2) if comments already exists
     #       3) follow comment paging, instead of re-getting all
 
+
+    def _fill_album(self, album, comments):
+        """Takes an already loaded album and fills out the photos and
+        comments"""
+
+        # get comments
+        if comments and 'comments' in album:
+            album['comments'] = self.graph.get_object('%s/comments' % album['id'])
+
+        # get album photos
+        album['photos'] = self.graph.get_object('%s/photos' % album['id'],500)
+
+        if len(album['photos']) == 0:
+            self.logger.error('album had zero photos: %s' % album['id'])
+
+        for photo in album['photos']:
+            # get picture comments
+            # this could be done with an FQL
+            if comments and 'comments' in photo:
+                photo['comments'] = self.graph.get_object('%s/comments' % photo['id'])
+        return album
+
     def get_album(self, id, comments=False):
         """Get a single album"""
 
@@ -117,21 +147,9 @@ class Helper(object):
         elif id ==  0:
             import pdb;pdb.set_trace()
 
-        try:
-            album = self.graph.get_object('%s' % id)
-        except Exception, e:
-            import pdb;pdb.set_trace()
+        album = self.graph.get_object('%s' % id)
 
-        # get comments
-        if comments and 'comments' in album:
-            album['comments'] = self.graph.get_object('%s/comments' % album['id'])
-        # get album photos
-        album['photos'] = self.graph.get_object('%s/photos' % album['id'],500)
-        for photo in album['photos']:
-            # get picture comments
-            if comments and 'comments' in photo:
-                photo['comments'] = self.graph.get_object('%s/comments' % photo['id'])
-        return album
+        return self._fill_album(album, comments)
 
     def get_albums(self, id, comments=False):
         """Get all albums uploaded by id"""
@@ -140,13 +158,14 @@ class Helper(object):
 
         data = self.graph.get_object('%s/albums' % id, 100)
         for album in data:
-            album = self.get_album(album['id'], comments)
+            album = self._fill_album(album, comments)
         return data
 
     def get_tagged(self, id, comments=False, full=True):
         """Get all photos where argument id is tagged.
 
         id: the object_id of target
+        comments: set to True to retrieve all comments
         full: get all photos from all album the user is tagged in
         """
 
@@ -154,43 +173,33 @@ class Helper(object):
 
         unsorted = self.graph.get_object('%s/photos' % id, 5000)
         unsorted_ids = [x['id'] for x in unsorted]
-
-        # holder album for special case
-        empty_album = self.get_album(0, comments)
-        empty_album_n = 0
-
-        aids = []
+        album_ids = self.find_album_ids(unsorted_ids)
 
         data = []
-        while len(unsorted) > 0:
-            self.logger.info('len(unsorted) = %d' % len(unsorted))
 
-            aid = '%s' % self.find_album_id(unsorted[0]['id'])
-
-            try:
-                temp = aids.index(aid)
-                self.logger.error('%s already in aids' % aid)
-            except Exception,e:
-                aids.append(aid)
-
-            album = self.get_album(aid, comments)
-
-            # aid = '0' special case:
-            #   album will not have any 'photos' so we must force it
-            if aid == '0':
-                empty_album_n = empty_album_n + 1
-                if empty_album_n == 0:
-                    data.append(empty_album)
-                empty_album['photos'].append(unsorted[0])
-                unsorted.remove(unsorted[0])
-            else:
-                # remove id's from unsorted that are in the album
-                photo_ids = [x['id'] for x in album['photos']]
-                unsorted = [x for x in unsorted if x['id'] not in photo_ids]
-                # limit album to only those in unsorted
-                if not full:
-                    photos = [x for x in unsorted if x['id'] in photo_ids]
-                    album['photos'] = photos
+        # TODO: this should be done in parallel
+        for album_id in album_ids:
+            album = self.get_album(album_id, comments)
+            # remove id's from unsorted that are in the album
+            photo_ids = [x['id'] for x in album['photos']]
+            unsorted = [x for x in unsorted if x['id'] not in photo_ids]
+            if not full:
+                # limit album to only those in unsorted, even though we now
+                # have information on them all... graph API sucks
+                photos = [x for x in unsorted if x['id'] in photo_ids]
+                album['photos'] = photos
                 data.append(album)
+
+        # anything not claimed under album_ids will fall into fake album
+        if len(unsorted) > 0:
+            empty_album = self.get_album('0', comments)
+            empty_album['photos'] = unsorted
+
+            for photo in empty_album['photos']:
+                # get picture comments
+                if comments and 'comments' in photo:
+                    photo['comments'] = self.graph.get_object('%s/comments' % photo['id'])
+
+            data.append(empty_album)
 
         return data

@@ -76,6 +76,7 @@ class GraphAPI(object):
     def __init__(self, access_token=None):
         self.access_token = access_token
         self.logger = logging.getLogger('facebook')
+        self.rtt = 0
 
     def get_object(self, id, limit=50):
         """Get an entine object from the Graph API by paging over the requested
@@ -131,6 +132,8 @@ class GraphAPI(object):
         self.logger.debug('GET: %s' % path)
         file = urllib.urlopen(path)
 
+        self.rtt = self.rtt+1
+
         try:
             response = _parse_json(file.read())
             self.logger.debug(json.dumps(response, indent=4))
@@ -179,6 +182,9 @@ class GraphAPI(object):
 
         self.logger.debug('GET: %s' % path)
         file = urllib.urlopen(path)
+
+        self.rtt = self.rtt+1
+
         try:
             response = _parse_json(file.read())
             self.logger.debug(json.dumps(response, indent=4))
@@ -211,6 +217,12 @@ class GraphAPI(object):
                     time.sleep(retries * standoff)
                 else:
                     raise
+
+    def get_stats(self):
+        return self.rtt
+
+    def reset_stats(self):
+        self.rtt = 0
 
 class GraphAPIError(Exception):
     def __init__(self, type, message):
