@@ -40,6 +40,12 @@ class Helper(object):
         self.graph = graph
         self.logger = logging.getLogger('helper')
 
+        # find all tagged photos
+        # feed pid's to find albums
+        # pull album info
+        # pull photos from albums
+        # pull comments & likes
+
     def find_album_id(self, picture_id):
         """Find the album that contains a picture.
 
@@ -48,6 +54,8 @@ class Helper(object):
         Returns the object_id of the album or '0' if the album cannot be
         retrieved.
         """
+
+        # TODO: allow picture_id's to be a list
 
         q = ''.join(['SELECT object_id, aid FROM album WHERE aid ',
                      'IN (SELECT aid FROM photo WHERE object_id=%s)'])
@@ -61,25 +69,6 @@ class Helper(object):
             self.logger.error('No object_id found (photo): %s' % picture_id)
             self.logger.error('Response: %s' % data)
             return '0'
-
-    def find_album_photos(self, album_id):
-        """Find all photos in an album.
-
-        The album_id arguement must be the object_id of an album.
-
-        Returns a list of photos in the form:
-        [{'object_id':'<object_id>', 'pid':'<pid>'}, ...]
-        """
-
-        q = ''.join(['SELECT object_id, pid FROM photo WHERE aid ',
-                     'IN (SELECT aid FROM album WHERE object_id=%s'])
-        data = self.query(q % album_id)
-
-        # TODO: verify data response when album_id does not exist
-        if len(data) == 0:
-            self.logger.error('No object_id found (album): %s' % album_id)
-            self.logger.error('Response: %s' % data)
-        return data
 
     # The following methods return a list of object id <> friend
     # [ {'id':<id>, 'name':<name>}, ... ]
@@ -96,7 +85,7 @@ class Helper(object):
     def get_pages(self, id):
         return self.graph.get_object('%s/likes' % id, 5000)
 
-    # The following method helps return information
+    # return the list of album information that id has uploaded
 
     def get_album_list(self, id):
         return self.graph.get_object('%s/albums' % id, 100)
@@ -118,13 +107,15 @@ class Helper(object):
 
         # handle special case, when PG does not have permissions to get info on
         # the album, but can see the photo
-        if id == 0 or id == '0':
+        if id == '0':
             album= {}
             album['id'] = '0'
             album['name'] = 'Unknown'
             album['comments'] = []
             album['photos'] = []
             return album
+        elif id ==  0:
+            import pdb;pdb.set_trace()
 
         try:
             album = self.graph.get_object('%s' % id)
