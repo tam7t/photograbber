@@ -17,10 +17,13 @@
 
 import facebook
 import helpers
+import downloader
+
 import argparse
 import time
 import logging
 import os
+import multiprocessing
 
 def main():
 
@@ -145,6 +148,9 @@ def main():
 
     # process each target
     for target in args.target:
+
+        target_info = helper.get_info(target)
+
         data = []
 
         u_data = []
@@ -170,6 +176,24 @@ def main():
         data.extend(t_data)
 
         # download data
+        pool = multiprocessing.Pool(processes=5)
+
+        for album in data:
+            # TODO: Error where 2 albums with same name exist
+            path = os.path.join(args.dir,target_info['name'])
+            pool.apply_async(downloader.save_album,
+                            (album,path)
+                            ) #callback=
+        pool.close()
+
+        logger.info('Waiting for childeren to finish')
+
+        while multiprocessing.active_children():
+            time.sleep(1)
+        pool.join()
+
+        logger.info('Child processes completed')
+
         try:
             pics = 0
             for album in data:

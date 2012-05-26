@@ -84,6 +84,9 @@ class Helper(object):
     def get_me(self):
         return self.graph.get_object('me')
 
+    def get_info(self, id):
+        return self.graph.get_object('%s' % id)
+
     def get_friends(self, id):
         return self.graph.get_object('%s/friends' % id, 5000)
 
