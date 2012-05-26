@@ -167,7 +167,7 @@ class Helper(object):
             album = self._fill_album(album, comments)
 
         # remove empty albums
-        data = [album for album in data if x is not None]
+        data = [album for album in data if album is not None]
         return data
 
     def get_tagged(self, id, comments=False, full=True):
@@ -212,6 +212,6 @@ class Helper(object):
             data.append(empty_album)
 
         # remove empty albums
-        data = [album for album in data if x is not None]
+        data = [album for album in data if album is not None]
 
         return data

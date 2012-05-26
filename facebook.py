@@ -44,6 +44,33 @@ except ImportError:
         from django.utils import simplejson
         _parse_json = lambda s: simplejson.loads(s)
 
+# function repeater decorator
+def repeat(func):
+    """Execute a function repeatedly until success.
+    n: retry the call <n> times before raising an error
+    standoff: multiplier increment for each standoff
+    function: pointer to function
+    args: arguments for a function
+    """
+
+    def wrapped(*args, **kwargs):
+        n=10
+        standoff=1.5
+        retries = 0
+        logger = logging.getLogger('repeat decorator')
+        while True:
+            try:
+                return func(*args, **kwargs)
+            except Exception, e:
+                logger.error('failed function: %s' % e)
+                if retries < n:
+                    retries += 1
+                    time.sleep(retries * standoff)
+                else:
+                    raise
+    return wrapped
+
+
 class GraphAPI(object):
     """A client for the Facebook Graph API.
 
@@ -78,7 +105,7 @@ class GraphAPI(object):
         self.logger = logging.getLogger('facebook')
         self.rtt = 0
 
-    def get_object(self, id, limit=50):
+    def get_object(self, id, limit=500):
         """Get an entine object from the Graph API by paging over the requested
         object until the entire object is retrieved.
 
@@ -101,44 +128,22 @@ class GraphAPI(object):
         response = self._request(id, args)
 
         if response.has_key('data'):
-            # possiblity of paging
             data.extend(response['data'])
-            while response['paging'].has_key('next'):
-                page_next = response['paging']['next']
-                response = self._follow(page_next)
-                data.extend(response['data'])
+
+            if response.has_key('paging'):
+                # iterate over pages
+                while response['paging'].has_key('next'):
+                    page_next = response['paging']['next']
+                    response = self._follow(page_next)
+                    if len(response['data']) > 0:
+                        data.extend(response['data'])
+                    else:
+                        break
         else:
-            self.logger.error('no response key "data"')
-            self.logger.error('response: %s' % response)
+            self.logger.debug('no response key "data"')
             data.extend(response)
 
         return data
-
-    @classmethod
-    def repeat(cls, function):
-        """Execute a function repeatedly until success.
-        n: retry the call <n> times before raising an error
-        standoff: multiplier increment for each standoff
-        function: pointer to function
-        args: arguments for a function
-        """
-
-        def wrapped(self, *args, **kwargs):
-            n=10
-            standoff=1.5
-            retries = 0
-            while True:
-                try:
-                    return function(self, *args, **kwargs)
-                except Exception, e:
-                    self.logger.error('failed function: %s' % e)
-                    import pdb;pdb.set_trace()
-                    if retries < n:
-                        retries += 1
-                        time.sleep(retries * standoff)
-                    else:
-                        raise
-        return wrapped
 
     @repeat
     def _follow(self, path):
