@@ -119,6 +119,8 @@ def main():
             # note, doesnt manually ask for caut options for album
             data = helper.get_album(album, comments=args.c)
         # download data
+        #
+        # TODO: call function to download the album
         return
 
     # --target <object_id 1> ... <object_id n>

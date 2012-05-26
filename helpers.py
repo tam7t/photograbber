@@ -40,12 +40,6 @@ class Helper(object):
         self.graph = graph
         self.logger = logging.getLogger('helper')
 
-        # find all tagged photos
-        # feed pid's to find albums
-        # pull album info
-        # pull photos from albums
-        # pull comments & likes
-
     def find_album_ids(self, picture_ids):
         """Find the albums that contains pictures.
 
@@ -99,7 +93,7 @@ class Helper(object):
     # return the list of album information that id has uploaded
 
     def get_album_list(self, id):
-        return self.graph.get_object('%s/albums' % id, 100)
+        return self.graph.get_object('%s/albums' % id)
 
     # The following methods return a list of albums & photos
     # returns [{album_1}, ..., {album_n} ]
@@ -118,19 +112,29 @@ class Helper(object):
 
         # get comments
         if comments and 'comments' in album:
-            album['comments'] = self.graph.get_object('%s/comments' % album['id'])
+            if len(album['comments']) >= 25:
+                album['comments'] = self.graph.get_object('%s/comments' % album['id'])
 
         # get album photos
-        album['photos'] = self.graph.get_object('%s/photos' % album['id'],500)
+        album['photos'] = self.graph.get_object('%s/photos' % album['id'])
 
         if len(album['photos']) == 0:
             self.logger.error('album had zero photos: %s' % album['id'])
+            return None
 
         for photo in album['photos']:
             # get picture comments
-            # this could be done with an FQL
             if comments and 'comments' in photo:
-                photo['comments'] = self.graph.get_object('%s/comments' % photo['id'])
+                n_before = len(photo['comments']['data'])
+                # using examples from: georgehtakei/photos
+                # the default number of comments to inculde in a photo from
+                # /photos or /<album>/photos is 25
+                # this applies to likes also
+                if n_before >= 25:
+                    photo['comments'] = self.graph.get_object('%s/comments' % photo['id'])
+                    n_after = len(photo['comments'])
+                    if n_before != n_after:
+                        self.logger.info('found more comments:' + str(n_before) + ' to ' + str(n_after))
         return album
 
     def get_album(self, id, comments=False):
@@ -138,8 +142,9 @@ class Helper(object):
 
         self.logger.info('begin get_album: %s' % id)
 
-        # handle special case, when PG does not have permissions to get info on
-        # the album, but can see the photo
+        # handle special case:
+        # create empty album if there are not permissions to view album info
+        # but can see photo from tagged
         if id == '0':
             album= {}
             album['id'] = '0'
@@ -147,8 +152,6 @@ class Helper(object):
             album['comments'] = []
             album['photos'] = []
             return album
-        elif id ==  0:
-            import pdb;pdb.set_trace()
 
         album = self.graph.get_object('%s' % id)
 
@@ -159,9 +162,12 @@ class Helper(object):
 
         self.logger.info('begin get_albums: %s' % id)
 
-        data = self.graph.get_object('%s/albums' % id, 100)
+        data = self.graph.get_object('%s/albums' % id)
         for album in data:
             album = self._fill_album(album, comments)
+
+        # remove empty albums
+        data = [album for album in data if x is not None]
         return data
 
     def get_tagged(self, id, comments=False, full=True):
@@ -174,7 +180,7 @@ class Helper(object):
 
         self.logger.info('begin get_tagged: %s' % id)
 
-        unsorted = self.graph.get_object('%s/photos' % id, 5000)
+        unsorted = self.graph.get_object('%s/photos' % id)
         unsorted_ids = [x['id'] for x in unsorted]
         album_ids = self.find_album_ids(unsorted_ids)
 
@@ -204,5 +210,8 @@ class Helper(object):
                     photo['comments'] = self.graph.get_object('%s/comments' % photo['id'])
 
             data.append(empty_album)
+
+        # remove empty albums
+        data = [album for album in data if x is not None]
 
         return data

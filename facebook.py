@@ -95,29 +95,72 @@ class GraphAPI(object):
 
         args = {}
         args["limit"] = limit
-        args["offset"] = 0
 
-        while (has_more):
-            self.logger.info('retieving: %s' % id)
+        # first request
+        self.logger.info('retieving: %s' % id)
+        response = self._request(id, args)
 
-            response = self._request(id, args)
-
-            # TODO: find if this 'if no' is ever executed
-            if not response.has_key('data'):
-                return response
-
-            if len(response['data']) < limit:
+        if response.has_key('data'):
+            # possiblity of paging
+            data.extend(response['data'])
+            while response['paging'].has_key('next'):
+                page_next = response['paging']['next']
+                response = self._follow(page_next)
                 data.extend(response['data'])
-                self.logger.info('elements: %d' % len(data))
-                has_more = False
-            else:
-                data.extend(response['data'])
-                args['offset'] = len(data)
+        else:
+            self.logger.error('no response key "data"')
+            self.logger.error('response: %s' % response)
+            data.extend(response)
 
         return data
 
+    @classmethod
+    def repeat(cls, function):
+        """Execute a function repeatedly until success.
+        n: retry the call <n> times before raising an error
+        standoff: multiplier increment for each standoff
+        function: pointer to function
+        args: arguments for a function
+        """
 
-    def _request_once(self, path, args=None):
+        def wrapped(self, *args, **kwargs):
+            n=10
+            standoff=1.5
+            retries = 0
+            while True:
+                try:
+                    return function(self, *args, **kwargs)
+                except Exception, e:
+                    self.logger.error('failed function: %s' % e)
+                    import pdb;pdb.set_trace()
+                    if retries < n:
+                        retries += 1
+                        time.sleep(retries * standoff)
+                    else:
+                        raise
+        return wrapped
+
+    @repeat
+    def _follow(self, path):
+        """Follow a grpah API path."""
+
+        self.logger.debug('GET: %s' % path)
+        file = urllib.urlopen(path)
+
+        self.rtt = self.rtt+1
+
+        try:
+            response = _parse_json(file.read())
+            self.logger.debug(json.dumps(response, indent=4))
+        finally:
+            file.close()
+        if response.get("error"):
+            raise GraphAPIError(response["error"]["type"],
+                                response["error"]["message"])
+        return response
+
+    @repeat
+    def _request(self, path, args=None):
         """Fetches the given path in the Graph API."""
 
         if not args: args = {}
@@ -144,30 +187,9 @@ class GraphAPI(object):
                                 response["error"]["message"])
         return response
 
-    def _request(self, path, args=None, n=10, standoff=1.5):
-        """Execute a Graph request.  Repeats on failure.
-
-        path: properly formatted path in the Graph API
-        args: list of extra arguments, 'limit' and 'offset'
-        n: retry the call <n> times before raising an error
-        standoff: multiplier increment for each standoff
-        """
-
-        retries = 0
-        while True:
-            try:
-                return self._request_once(path, args)
-            except Exception, e:
-                self.logger.error('path request failed: %s' % path)
-                self.logger.error('args = %s' % args)
-                if retries < n:
-                    retries += 1
-                    time.sleep(retries * standoff)
-                else:
-                    raise
-
-    def _fql_once(self, query):
-        """Execute an FQL query once.
+    @repeat
+    def fql(self, query):
+        """Execute an FQL query.
 
         query: properly formatted FQL query to execute
         """
@@ -192,31 +214,10 @@ class GraphAPI(object):
                 raise GraphAPIError(response["error_code"],
                                     response["error_msg"])
         except Exception, e:
-            # pass exception up!
             raise e
         finally:
             file.close()
         return response
-
-    def fql(self, query, n=10, standoff=1.5):
-        """Execute an FQL query.  Repeats on failure.
-
-        query: properly formatted FQL query to execute
-        n: retry the call <n> times before raising an error
-        standoff: multiplier increment for each standoff
-        """
-
-        retries = 0
-        while True:
-            try:
-                return self._fql_once(query)
-            except Exception, e:
-                self.logger.error('query failed: %s' % query)
-                if retries < n:
-                    retries += 1
-                    time.sleep(retries * standoff)
-                else:
-                    raise
 
     def get_stats(self):
         return self.rtt
