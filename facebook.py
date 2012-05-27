@@ -30,6 +30,7 @@ import hashlib
 import time
 import urllib
 import logging
+from repeater import repeat
 
 # Find a JSON parser
 try:
@@ -43,30 +44,6 @@ except ImportError:
         # For Google AppEngine
         from django.utils import simplejson
         _parse_json = lambda s: simplejson.loads(s)
-
-# function repeater decorator
-def repeat(func, n=10, standoff=1.5):
-    """Execute a function repeatedly until success.
-    func: pointer to function
-    n: retry the call <n> times before raising an error
-    standoff: multiplier increment for each standoff
-    """
-
-    def wrapped(*args, **kwargs):
-        retries = 0
-        logger = logging.getLogger('repeat decorator')
-        while True:
-            try:
-                return func(*args, **kwargs)
-            except Exception, e:
-                logger.error('failed function: %s' % e)
-                if retries < n:
-                    retries += 1
-                    time.sleep(retries * standoff)
-                else:
-                    raise
-    return wrapped
-
 
 class GraphAPI(object):
     """A client for the Facebook Graph API.
@@ -91,10 +68,6 @@ class GraphAPI(object):
     You can obtain an access token via OAuth or by using the Facebook
     JavaScript SDK. See http://developers.facebook.com/docs/authentication/
     for details.
-
-    If you are using the JavaScript SDK, you can use the
-    get_user_from_cookie() method below to get the OAuth access token
-    for the active user from the cookie saved by the SDK.
     """
 
     def __init__(self, access_token=None):
@@ -109,9 +82,12 @@ class GraphAPI(object):
             graph = facebook.GraphAPI(access_token)
             user = graph.get_object('me')
             print user['id']
+            photos = graph.get_object('me/photos')
+            for photo in photos:
+                print photo['id']
 
         id: path to the object to retrieve
-        limit: number of objects to retrieve in each page
+        limit: number of objects to retrieve in each page [max = 5000]
         """
 
         data = []
@@ -125,6 +101,7 @@ class GraphAPI(object):
         response = self._request(id, args)
 
         if response.has_key('data'):
+            # response is a list
             data.extend(response['data'])
 
             if response.has_key('paging'):
@@ -137,6 +114,7 @@ class GraphAPI(object):
                     else:
                         break
         else:
+            # response is a dict
             self.logger.debug('no response key "data"')
             data = response
 
@@ -146,7 +124,7 @@ class GraphAPI(object):
 
     @repeat
     def _follow(self, path):
-        """Follow a grpah API path."""
+        """Follow a graph API path."""
 
         self.logger.debug('GET: %s' % path)
         file = urllib.urlopen(path)
@@ -193,10 +171,9 @@ class GraphAPI(object):
 
     @repeat
     def fql(self, query):
-        """Execute an FQL query.
+        """Execute an FQL query."""
 
-        query: properly formatted FQL query to execute
-        """
+        # see FQL documention link
 
         query = urllib.quote(query)
         path = ''.join(['https://api.facebook.com/method/fql.query?',
@@ -234,7 +211,7 @@ class GraphAPIError(Exception):
         Exception.__init__(self, message)
         self.type = type
 
-### photograbber Additions ###
+### photograbber specific ###
 
 import webbrowser
 
