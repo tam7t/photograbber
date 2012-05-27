@@ -45,17 +45,14 @@ except ImportError:
         _parse_json = lambda s: simplejson.loads(s)
 
 # function repeater decorator
-def repeat(func):
+def repeat(func, n=10, standoff=1.5):
     """Execute a function repeatedly until success.
+    func: pointer to function
     n: retry the call <n> times before raising an error
     standoff: multiplier increment for each standoff
-    function: pointer to function
-    args: arguments for a function
     """
 
     def wrapped(*args, **kwargs):
-        n=10
-        standoff=1.5
         retries = 0
         logger = logging.getLogger('repeat decorator')
         while True:
@@ -141,7 +138,9 @@ class GraphAPI(object):
                         break
         else:
             self.logger.debug('no response key "data"')
-            data.extend(response)
+            data = response
+
+        self.logger.info('data size: %d' % len(data))
 
         return data
 

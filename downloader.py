@@ -55,13 +55,16 @@ def save_album(album, path):
         retries = 0
 
         pic_path = os.path.join(path, photo['path'])
+
+        # if os.path.isfile(filename):
+
         picout = open(pic_path, 'wb')
         handler = urllib2.Request(photo['src_big'])
         retry = True
 
         while retry:
             try:
-                print 'downloading:%s' % photo['src_big']
+                logger.info('downloading:%s' % photo['src_big'])
                 data = urllib2.urlopen(handler)
                 retry = False
 
@@ -74,12 +77,12 @@ def save_album(album, path):
             except Exception, e:
                 if retries < max_retries:
                     retries += 1
-                    print 'retrying download %s' % photo['src_big']
+                    logger.info('retrying download %s' % photo['src_big'])
                     # sleep longer and longer between retries
                     time.sleep(retries * 2)
                 else:
                     # skip on 404 error
-                    print 'Could not download %s' % photo['src_big']
+                    logger.info('Could not download %s' % photo['src_big'])
                     picout.close()
                     os.remove(pic_path)
                     retry = False
@@ -99,6 +102,6 @@ def save_album(album, path):
         shutil.copy(filename, alfilename)
         # shutil.copy(os.path.join('dep', 'viewer.html'), htmlfilename)
     except Exception, e:
-        print 'Saving JSON Failed: %s', filename
+        logger.info('Saving JSON Failed: %s', filename)
 
     return

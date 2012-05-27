@@ -154,15 +154,19 @@ class Helper(object):
             return album
 
         album = self.graph.get_object('%s' % id)
-
+        if type(album) is not dict:
+            import pdb;pdb.set_trace()
         return self._fill_album(album, comments)
 
     def get_albums(self, id, comments=False):
         """Get all albums uploaded by id"""
 
-        self.logger.info('begin get_albums: %s' % id)
+        self.logger.info('get_albums: %s' % id)
 
         data = self.graph.get_object('%s/albums' % id)
+
+        self.logger.info('albums: %d' % len(data))
+
         for album in data:
             album = self._fill_album(album, comments)
 
@@ -178,7 +182,7 @@ class Helper(object):
         full: get all photos from all album the user is tagged in
         """
 
-        self.logger.info('begin get_tagged: %s' % id)
+        self.logger.info('get_tagged: %s' % id)
 
         unsorted = self.graph.get_object('%s/photos' % id)
         unsorted_ids = [x['id'] for x in unsorted]
@@ -186,7 +190,9 @@ class Helper(object):
 
         data = []
 
-        # TODO: this should be done in parallel
+        self.logger.info('%d photos in %d albums' % (len(unsorted_ids), len(album_ids)))
+
+        # TODO: this could be done in parallel
         for album_id in album_ids:
             album = self.get_album(album_id, comments)
             # remove id's from unsorted that are in the album
@@ -197,7 +203,7 @@ class Helper(object):
                 # have information on them all... graph API sucks
                 photos = [x for x in unsorted if x['id'] in photo_ids]
                 album['photos'] = photos
-                data.append(album)
+            data.append(album)
 
         # anything not claimed under album_ids will fall into fake album
         if len(unsorted) > 0:
