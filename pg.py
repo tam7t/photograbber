@@ -120,10 +120,10 @@ def main():
     if args.album is not None:
         for album in args.album:
             # note, doesnt manually ask for caut options for album
+            print 'Retrieving album data: %s...' % album
             data = helper.get_album(album, comments=args.c)
-        # download data
-        #
-        # TODO: call function to download the album
+            print 'Downloading photos'
+            downloader.save_album(data, args.dir)
         return
 
     # --target <object_id 1> ... <object_id n>
@@ -153,12 +153,10 @@ def main():
 
     # process each target
     for target in args.target:
-
         target_info = helper.get_info(target)
-
         data = []
-
         u_data = []
+
         # get user uploaded photos
         if args.u:
             print 'Retrieving %s\'s album data...' % target
