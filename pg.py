@@ -110,7 +110,7 @@ def main():
                 print ('%(id)s:"%(name)s"' % album).encode('utf-8')
         return
 
-    # --dir
+    # --dir <full path to download location>
     if args.dir is None:
         current_dir = unicode(os.getcwd())
         args.dir = unicode(raw_input("Download Location [%s]: " % current_dir))
@@ -171,14 +171,13 @@ def main():
             print 'Retrieving %s\'s tagged photo data...' % target
             t_data = helper.get_tagged(target, comments=args.c, full=args.a)
 
-        for user_album in u_data:
-            added = False
-            # will the album be added from t_data?
-            for tagged_album in t_data:
-                if tagged_album['id'] == user_album['id']:
-                    added = True
-            if not added:
-                data.append(user_album)
+        if args.u and args.t:
+            # list of user ids
+            u_ids = [album['id'] for album in u_data]
+            # remove tagged albums if part of it is a user album
+            t_data = [album for album in t_data if album['id'] not in u_ids]
+
+        data.extend(u_data)
         data.extend(t_data)
 
         # download data

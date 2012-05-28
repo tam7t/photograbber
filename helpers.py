@@ -195,14 +195,14 @@ class Helper(object):
         # TODO: this could be done in parallel
         for album_id in album_ids:
             album = self.get_album(album_id, comments)
-            # remove id's from unsorted that are in the album
             photo_ids = [x['id'] for x in album['photos']]
-            unsorted = [x for x in unsorted if x['id'] not in photo_ids]
             if not full:
                 # limit album to only those in unsorted, even though we now
                 # have information on them all... graph API sucks
                 photos = [x for x in unsorted if x['id'] in photo_ids]
                 album['photos'] = photos
+            # remove id's from unsorted that are in the album
+            unsorted = [x for x in unsorted if x['id'] not in photo_ids]
             data.append(album)
 
         # anything not claimed under album_ids will fall into fake album

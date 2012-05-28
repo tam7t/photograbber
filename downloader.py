@@ -21,6 +21,7 @@ import json
 import time
 import urllib2
 import shutil
+import re
 
 # download album methods for multiprocessing
 
@@ -34,7 +35,10 @@ def save_album(album, path):
     logger = logging.getLogger('save_album')
 
     # recursively make path
-    path = os.path.join(path, album['name'])
+    REPLACE_RE = re.compile(r'\*|"|\'|:|<|>|\?|\\|/|\|,|\|| ')
+    folder = unicode(album['name'])
+    folder = REPLACE_RE.sub('_', folder)
+    path = os.path.join(path, folder)
     if not os.path.isdir(path):
         os.makedirs(path) # recursive makedir
 
