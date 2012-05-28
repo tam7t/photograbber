@@ -76,10 +76,14 @@ def main():
     graph = facebook.GraphAPI(args.token)
     helper = helpers.Helper(graph)
 
+    # check if token works
+    my_info = helper.get_me()
+    if my_info == False:
+        print 'Provided Token Failed: OAuthException'
+
     # --list-targets {'me','friends','pages','following','all'}
     target_list = []
     if args.list_targets == 'me':
-        my_info = helper.get_me()
         target_list.append(my_info)
     elif args.list_targets == 'friends':
         target_list.extend(helper.get_friends('me'))
@@ -88,7 +92,6 @@ def main():
     elif args.list_targets == 'following':
         target_list.extend(helper.get_subscriptions('me'))
     elif args.list_targets == 'all':
-        my_info = graph.get_me()
         target_list.append(my_info)
         target_list.extend(helper.get_friends('me'))
         target_list.extend(helper.get_pages('me'))

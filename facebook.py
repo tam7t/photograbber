@@ -88,6 +88,8 @@ class GraphAPI(object):
 
         id: path to the object to retrieve
         limit: number of objects to retrieve in each page [max = 5000]
+
+        Returns False on OAuthException.
         """
 
         data = []
@@ -165,6 +167,9 @@ class GraphAPI(object):
         finally:
             file.close()
         if response.get("error"):
+            if repsponse["error"]["type"] == 190:
+                # abort on OAuthException
+                return False
             raise GraphAPIError(response["error"]["type"],
                                 response["error"]["message"])
         return response
