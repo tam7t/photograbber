@@ -1,0 +1,283 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<head>
+   <!--
+
+   Written by Tommy Murphy, ourbunny.com
+   Please, someone write a better version!
+
+   -->
+   <title>photograbber</title>
+   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+   <link rel="stylesheet" href="http://yui.yahooapis.com/2.7.0/build/reset-fonts-grids/reset-fonts-grids.css" type="text/css" />
+   <link rel="stylesheet" type="text/css" href="http://yui.yahooapis.com/2.8.1/build/base/base-min.css" />
+
+   <script type="text/javascript" src="http://yui.yahooapis.com/2.8.1/build/yahoo/yahoo-min.js"></script>
+   <script type="text/javascript" src="http://yui.yahooapis.com/2.8.1/build/dom/dom-min.js"></script>
+   <script type="text/javascript" src="http://yui.yahooapis.com/2.8.1/build/event/event-min.js" ></script>
+   <script type="text/javascript" src="http://yui.yahooapis.com/2.8.1/build/json/json.js"></script>
+   <script type="text/javascript" src="http://yui.yahooapis.com/2.8.1/build/datasource/datasource-min.js"></script> 
+
+   <script type="text/javascript" src="album.json"></script>
+
+<style type="text/css">
+
+#hd h1 {
+	color: black;
+	text-align: center;
+	line-height: 2em;
+	background-color: #cccccc;
+}
+
+#ft p {
+	line-height: 2em;
+	background-color: #ffcc66;
+}
+#ft {
+	margin-top: 50px;
+	text-align:center;
+}
+#pics {
+	height: 500px;
+	overflow-y: scroll;
+}
+.not_selected{
+    float:left;
+    clear:none;
+    width:80px;
+    background-color:inherit;
+    padding:5px;
+    line-height:0px;
+}
+.selected{
+    float:left;
+    clear:none;
+    width:80px;
+    background-color: #ffff66;
+    padding:5px;
+    line-height:0px;
+}
+.column{
+	float:left;
+	width:90px;
+}
+#box {
+	position: absolute;
+	width: 120px;
+	height: 120px;
+	border: 10px solid #ffff99;
+	top:-300px;
+	left:-300px;
+}
+#boxout{
+	border: 1px solid #330066;
+	width: 118px;
+	height: 118px;
+}
+#tags, #comments, #albumcomments{
+	margin-top:10px;
+}
+#tags a{
+	margin:10px;
+}
+</style>
+
+<script type="text/javascript">
+<!--
+set_selection = function(thumb) {
+    // clear old style(s)
+    var old = YAHOO.util.Dom.getElementsByClassName("selected");
+    for (var i=0; i < old.length; i++) {
+        old[i].className = "not_selected";
+    }
+
+    // set new style
+    thumb.view.className = "selected";
+
+    // update picture
+    var pid = thumb.pk;
+    var mydiv = document.getElementById('pic-info');
+
+    // clear
+    while(mydiv.firstChild) {
+        mydiv.removeChild(mydiv.firstChild);
+    }
+
+    hidetag();
+
+    // heading
+    var title = document.createElement("h1");
+    if (al['photos'][pid]['caption'] != "") {
+        // fix: find how to figure out the caption
+        title.innerHTML = "<h1>" + al['photos'][pid]['caption'] + "</h1>";
+    } else {
+        title.innerHTML = "<h1>Untitled</h1>";
+    }
+    mydiv.appendChild(title);
+
+    var date = document.createElement("h2");
+    date.innerHTML = al['photos'][pid]['created_time'];
+
+    mydiv.appendChild(date);
+
+    var imgp = document.createElement("div");
+    var oimg = document.createElement("img");
+    oimg.id = "thepic";
+    // fix: size of the image
+    oimg.setAttribute('src', al['photos'][pid]['path']);
+    imgp.appendChild(oimg);
+    mydiv.appendChild(imgp);
+
+    // fix: find how tags work
+    if (al['photos'][pid]['tags']) {
+        var tagdiv = document.createElement("div");
+        tagdiv.id = "tags";
+        tagdiv.innerHTML = "<strong>Tagged:</strong> ";
+        mydiv.appendChild(tagdiv);
+
+        for (tag in al['photos'][pid]['tags']) {
+            var thetag = document.createElement('a');
+            thetag.innerHTML = al['photos'][pid]['tags'][tag]['text'];
+            thetag.href="#";
+            var elem = {};
+            elem.tag = tag;
+            elem.pid = pid;
+            YAHOO.util.Event.addListener(thetag,"mouseover",tagit,elem);
+            YAHOO.util.Event.addListener(thetag,"mouseout",hidetag);
+            tagdiv.appendChild(thetag);
+        }
+    }
+
+    if (al['photos'][pid]['comments']) {
+        var cdiv = document.createElement("div");
+        cdiv.id = "comments";
+        mydiv.appendChild(cdiv);
+        for (comment in al['photos'][pid]['comments']['data']) {
+            var thecomment = document.createElement('p');
+            var name = al['photos'][pid]['comments']['data'][comment]['from']['name'];
+            var text = al['photos'][pid]['comments']['data'][comment]['message'];
+            var time = al['photos'][pid]['comments']['data'][comment]['created_time'];
+            thecomment.innerHTML = "<strong>" + name + ":</strong> " + text + "<br/><i>" + time + "</i>";
+            cdiv.appendChild(thecomment);
+        }
+    }
+}
+
+function tagit(e, elem) {
+    var tag = elem.tag;
+    var pid = elem.pid;
+    var tp = document.getElementById('thepic');
+    var tb = document.getElementById('box');
+    tb.position = 'absolute';
+    // fix
+    tb.style.left = '' + (tp.offsetLeft - 70 + (al['photos'][pid]['tags'][tag]['xcoord']/100) * tp.offsetWidth) + 'px';
+    tb.style.top = '' + (tp.offsetTop - 70 + (al['photos'][pid]['tags'][tag]['ycoord']/100) * tp.offsetHeight) + 'px';
+    tb.style.display = "block";
+}
+
+function hidetag(e) {
+    var tb = document.getElementById('box');
+    tb.style.top = '-300px';
+    tb.style.left = '-300px';
+}
+
+clickimg = function(e, elem) {
+    set_selection(elem);
+}
+
+function paintAlbum(){
+
+    // create thumbnails
+
+    var sel_1 = document.getElementById('p1');
+    var sel_2 = document.getElementById('p2');
+    var sel_3 = document.getElementById('p3');
+
+    for (photo in al['photos']) {
+        var elem = {};
+        elem.pk = photo;
+        elem.img = al['photos'][photo]['path'];
+        elem.view = document.createElement("div");
+        elem.view.id = "img_" + photo;
+        elem.view.className = "not_selected";
+        elem.view.innerHTML = "<img src=\"" + elem.img + "\"\ width=\"80px\"\>";
+        YAHOO.util.Event.addListener(elem.view,"click",clickimg,elem);
+
+        if (sel_1.offsetHeight <= sel_2.offsetHeight && sel_1.offsetHeight <= sel_3.offsetHeight) {
+            sel_1.appendChild(elem.view);
+        } else if (sel_2.offsetHeight <= sel_1.offsetHeight && sel_2.offsetHeight <= sel_3.offsetHeight) {
+            sel_2.appendChild(elem.view);
+        } else {
+            sel_3.appendChild(elem.view);
+        }
+    }
+
+    // print album info
+
+    var ainfo = document.getElementById('albuminfo');
+
+    ainfo.head = document.createElement('h1');
+    ainfo.head.innerHTML = al['name'];
+    ainfo.appendChild(ainfo.head);
+    ainfo.own = document.createElement('h2');
+    ainfo.own.innerHTML = al['from']['name'];
+    ainfo.appendChild(ainfo.own);
+    ainfo.location = document.createElement('h3');
+    // fix: location
+    ainfo.location.innerHTML = al['location'] + "<br/>Updated: " + al['created_time'];
+    ainfo.appendChild(ainfo.location);
+    ainfo.desc = document.createElement('p');
+    // fix: description
+    ainfo.desc.innerHTML = al['description'];
+    ainfo.appendChild(ainfo.desc);
+
+    if (al['comments']) {
+        var cdiv = document.getElementById('albumcomments');
+        for (comment in al['comments']['data']) {
+            var thecomment = document.createElement('p');
+            var name = al['comments']['data'][comment]['from']['name'];
+            var text = al['comments']['data'][comment]['message'];
+            var time = al['comments']['data'][comment]['created_time'];
+            thecomment.innerHTML = "<strong>" + name + ":</strong> " + text + "<br/><i>" + time + "</i>";
+            cdiv.appendChild(thecomment);
+        }
+    }
+}
+
+YAHOO.util.Event.on(window,"load",paintAlbum);
+-->
+</script>
+
+
+</head>
+<body>
+<div id="doc3" class="yui-t3">
+    <div id="hd"><h1>photograbber album viewer</h1></div>
+    <div id="bd">
+    <div id="yui-main">
+    <div class="yui-b"><div class="yui-g">
+    <div id="pic-info">
+    <h1>Select a photo from the left</h1>
+    <h2>This page is best viewed in a modern web browser...</h2>
+    </div>
+    <div id="box"><div id="boxout"></div></div> <!-- used to highlight tagged person -->
+    </div>
+</div>
+    </div>
+    <div class="yui-b">
+    <div id="albuminfo">
+    </div>
+    <div id="pics">
+        <div id="p1" class="column"></div>
+        <div id="p2" class="column"></div>
+        <div id="p3" class="column"></div>
+    </div>
+    <div id="albumcomments">
+    </div>
+    </div>
+
+    </div>
+   <div id="ft"><p>generated by <a href="http://code.google.com/p/photograbber">photograbber</a></p></div>
+</div>
+</body>
+</html>
