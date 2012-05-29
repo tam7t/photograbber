@@ -104,7 +104,7 @@ def save_album(album, path):
         db_file.write(";\n")
         db_file.close()
         shutil.copy(filename, alfilename)
-        # shutil.copy(os.path.join('dep', 'viewer.html'), htmlfilename)
+        shutil.copy(os.path.join('dep', 'viewer.html'), htmlfilename)
     except Exception, e:
         logger.info('Saving JSON Failed: %s', filename)
 
