@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8' />
+    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
+    <meta name="description" content="PhotoGrabber : Download photos from Facebook" />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>PhotoGrabber</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/tam7t/photograbber">View on GitHub</a>
+
+          <h1 id="project_title">PhotoGrabber</h1>
+          <h2 id="project_tagline">Download photos from Facebook</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/tam7t/photograbber/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/tam7t/photograbber/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <h3>Usage</h3>
+
+<pre><code>$ ./pg.py 
+Open Browser [y/n]: y
+Created new window in existing browser session.
+Enter Token: *** REDACTED
+Download Location [/home/tam7t/photograbber]: 
+Target: me
+
+Options
+-------
+u: Download all albums uploaded by the targets. (Use with --target)
+t: Download all photos with the target tagged. (Use with --target)
+c: Download full comment data. (Use with --target)
+a: Download full album, even if just 1 photo has the tagged target. (Use with --target)
+Input Options (e.g. 'cau' or 'caut'):utca               
+Retrieving me's album data...
+Retrieving me's tagged photo data...
+Downloading photos
+Complete!
+</code></pre>
+
+<h3>Arguments</h3>
+
+<pre><code>$ ./pg.py --help
+usage: pg.py [-h] [--token TOKEN]
+             [--list-targets {me,friends,pages,following,all}]
+             [--list-albums LIST_ALBUMS [LIST_ALBUMS ...]]
+             [--target TARGET [TARGET ...]] [-u] [-t] [-c] [-a]
+             [--album ALBUM [ALBUM ...]] [--dir DIR] [--debug {info,debug}]
+
+Download Facebook photos.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --token TOKEN         Specify the OAuth token used to authenticate with
+                        Facebook.
+  --list-targets {me,friends,pages,following,all}
+                        Display names and object_id's of potential targets
+  --list-albums LIST_ALBUMS [LIST_ALBUMS ...]
+                        List the albums uploaded by a target. Separate the
+                        object_id's of targets with spaces.
+  --target TARGET [TARGET ...]
+                        Download targets. Separate the object_id's of people
+                        or pages with spaces.
+  -u                    Download all albums uploaded by the targets. (Use with
+                        --target)
+  -t                    Download all photos with the target tagged. (Use with
+                        --target)
+  -c                    Download full comment data. (Use with --target)
+  -a                    Download full album, even if just 1 photo has the
+                        tagged target. (Use with --target)
+  --album ALBUM [ALBUM ...]
+                        Download full albums. Separate the object_id's of the
+                        albums with spaces.
+  --dir DIR             Specify the directory to store the downloaded
+                        information. (Use with --target or --album)
+  --debug {info,debug}  Log extra debug information to pg.log
+</code></pre>
+
+<h3>Authors and Contributors</h3>
+
+<p>PhotoGrabber is created and maintained by Tommy Murphy (<a href="https://github.com/tam7t" class="user-mention">@tam7t</a>).  The original idea for PhotoGrabber came from a script by <a href="https://github.com/seancolyer" class="user-mention">@seancolyer</a>.  The first generation version of PhotoGrabber included a major contribution by [Bryce Boe] that added capability to download full albums and photo metadata including comments.</p>
+
+<h3>Support or Contact</h3>
+
+<p>Having trouble with PhotoGrabber? Submit a ticket to Issue tracker.</p>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">PhotoGrabber maintained by <a href="https://github.com/tam7t">tam7t</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
