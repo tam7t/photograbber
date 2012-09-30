@@ -25,26 +25,37 @@ import logging
 import os
 import multiprocessing
 
+# help strings
+helps = {}
+helps['u'] = 'Download all albums uploaded by the targets. (Use with --target)'
+helps['t'] = 'Download all photos with the target tagged. (Use with --target)'
+helps['c'] = 'Download full comment data. (Use with --target)'
+helps['a'] = 'Download full album, even if just 1 photo has the tagged target. (Use with --target)'
+helps['gui'] =  'Use wx based GUI'
+helps['token'] = 'Specify the OAuth token used to authenticate with Facebook.'
+helps['list-targets'] ='Display names and object_id\'s of potential targets'
+helps['list-albums'] = 'List the albums uploaded by a target.  Separate the object_id\'s of targets with spaces.'
+helps['target'] = 'Download targets. Separate the object_id\'s of people or pages with spaces.'
+helps['album'] = 'Download full albums.  Separate the object_id\'s of the albums with spaces.'
+helps['dir'] = 'Specify the directory to store the downloaded information. (Use with --target or --album)'
+helps['debug'] = 'Log extra debug information to pg.log'
+
 def main():
-    # help strings
-    u_help = 'Download all albums uploaded by the targets. (Use with --target)'
-    t_help = 'Download all photos with the target tagged. (Use with --target)'
-    c_help = 'Download full comment data. (Use with --target)'
-    a_help = 'Download full album, even if just 1 photo has the tagged target. (Use with --target)'
 
     # parse arguements
     parser = argparse.ArgumentParser(description="Download Facebook photos.")
-    parser.add_argument('--token', help='Specify the OAuth token used to authenticate with Facebook.')
-    parser.add_argument('--list-targets', choices=('me','friends','pages','following','all'), help='Display names and object_id\'s of potential targets')
-    parser.add_argument('--list-albums', nargs='+', help='List the albums uploaded by a target.  Separate the object_id\'s of targets with spaces.')
-    parser.add_argument('--target', nargs='+', help='Download targets. Separate the object_id\'s of people or pages with spaces.')
-    parser.add_argument('-u', action='store_true', help=u_help)
-    parser.add_argument('-t', action='store_true', help=t_help)
-    parser.add_argument('-c', action='store_true', help=c_help)
-    parser.add_argument('-a', action='store_true', help=a_help)
-    parser.add_argument('--album', nargs='+', help='Download full albums.  Separate the object_id\'s of the albums with spaces.')
-    parser.add_argument('--dir', help='Specify the directory to store the downloaded information. (Use with --target or --album)')
-    parser.add_argument('--debug', choices=('info','debug'), help='Log extra debug information to pg.log')
+    parser.add_argument('--gui', action='store_true', help=helps['gui'])
+    parser.add_argument('--token', help=helps['token'])
+    parser.add_argument('--list-targets', choices=('me','friends','pages','following','all'), help=helps['list-targets'])
+    parser.add_argument('--list-albums', nargs='+', help=helps['list-albums'])
+    parser.add_argument('--target', nargs='+', help=helps['target'])
+    parser.add_argument('-u', action='store_true', help=helps['u'])
+    parser.add_argument('-t', action='store_true', help=helps['t'])
+    parser.add_argument('-c', action='store_true', help=helps['c'])
+    parser.add_argument('-a', action='store_true', help=helps['a'])
+    parser.add_argument('--album', nargs='+', help=helps['album'])
+    parser.add_argument('--dir', help=helps['dir'])
+    parser.add_argument('--debug', choices=('info','debug'), help=helps['debug'])
 
     args = parser.parse_args()
 
@@ -79,6 +90,7 @@ def main():
     # check if token works
     my_info = helper.get_me()
     if my_info == False:
+        # TODO: replace with logging.error
         print 'Provided Token Failed: OAuthException'
 
     # --list-targets {'me','friends','pages','following','all'}
@@ -140,10 +152,10 @@ def main():
             print ''
             print 'Options'
             print '-------'
-            print 'u: %s' % u_help
-            print 't: %s' % t_help
-            print 'c: %s' % c_help
-            print 'a: %s' % a_help
+            print 'u: %s' % helps['u']
+            print 't: %s' % helps['t']
+            print 'c: %s' % helps['c']
+            print 'a: %s' % helps['a']
             opt_str = raw_input("Input Options (e.g. 'cau' or 'caut'):")
             if 'u' in opt_str:
                 args.u = True
