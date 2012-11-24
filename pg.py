@@ -75,6 +75,12 @@ def main():
 
     logger = logging.getLogger('photograbber')
 
+    # GUI
+    if args.gui:
+        import pgui
+        pgui.start()
+        exit()
+
     # Login
     if args.token is None:
         browser = raw_input("Open Browser [y/n]: ")

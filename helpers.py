@@ -82,13 +82,16 @@ class Helper(object):
         return self.graph.get_object('%s' % id)
 
     def get_friends(self, id):
-        return self.graph.get_object('%s/friends' % id, 5000)
+        data = self.graph.get_object('%s/friends' % id, 5000)
+        return sorted(data, key=lambda k:k['name'].lower())
 
     def get_subscriptions(self, id):
-        return self.graph.get_object('%s/subscribedto' % id, 5000)
+        data = self.graph.get_object('%s/subscribedto' % id, 5000)
+        return sorted(data, key=lambda k:k['name'].lower())
 
     def get_pages(self, id):
-        return self.graph.get_object('%s/likes' % id, 5000)
+        data = self.graph.get_object('%s/likes' % id, 5000)
+        return sorted(data, key=lambda k:k['name'].lower())
 
     # return the list of album information that id has uploaded
 
