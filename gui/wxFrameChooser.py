@@ -3,14 +3,6 @@
 
 import wx
 
-# begin wxGlade: dependencies
-# end wxGlade
-
-# begin wxGlade: extracode
-
-# end wxGlade
-
-
 class wxFrameChooser(wx.Frame):
     def __init__(self, *args, **kwds):
         # begin wxGlade: wxFrameChooser.__init__
@@ -64,5 +56,3 @@ class wxFrameChooser(wx.Frame):
         # import pdb;pdb.set_trace()
         self.list_box_1.GetSelections() # set of id's, if zero selected?
         self.state.toOptions()
-
-# end of class wxFrameChooser

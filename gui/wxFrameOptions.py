@@ -3,14 +3,6 @@
 
 import wx
 
-# begin wxGlade: dependencies
-# end wxGlade
-
-# begin wxGlade: extracode
-
-# end wxGlade
-
-
 class wxFrameOptions(wx.Frame):
     def __init__(self, *args, **kwds):
         # begin wxGlade: wxFrameOptions.__init__
@@ -61,5 +53,3 @@ class wxFrameOptions(wx.Frame):
 
     def Submit(self, event):
         self.state.toFolder()
-
-# end of class wxFrameOptions

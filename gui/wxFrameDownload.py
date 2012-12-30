@@ -3,14 +3,6 @@
 
 import wx
 
-# begin wxGlade: dependencies
-# end wxGlade
-
-# begin wxGlade: extracode
-
-# end wxGlade
-
-
 class wxFrameDownload(wx.Frame):
     def __init__(self, *args, **kwds):
         # begin wxGlade: wxFrameDownload.__init__
@@ -57,5 +49,3 @@ class wxFrameDownload(wx.Frame):
 
     def Quit(self, event):
         exit()
-
-# end of class wxFrameDownload

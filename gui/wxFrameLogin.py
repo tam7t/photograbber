@@ -3,14 +3,6 @@
 
 import wx
 
-# begin wxGlade: dependencies
-# end wxGlade
-
-# begin wxGlade: extracode
-
-# end wxGlade
-
-
 class wxFrameLogin(wx.Frame):
     def __init__(self, *args, **kwds):
         # begin wxGlade: wxFrameLogin.__init__
@@ -53,5 +45,3 @@ class wxFrameLogin(wx.Frame):
 
     def Submit(self, event):
         self.state.toToken()
-
-# end of class wxFrameLogin

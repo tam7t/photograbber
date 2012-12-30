@@ -3,14 +3,6 @@
 
 import wx
 
-# begin wxGlade: dependencies
-# end wxGlade
-
-# begin wxGlade: extracode
-
-# end wxGlade
-
-
 class wxFrameToken(wx.Frame):
     def __init__(self, *args, **kwds):
         # begin wxGlade: wxFrameToken.__init__
@@ -56,5 +48,3 @@ class wxFrameToken(wx.Frame):
     def Submit(self, event):
         # TODO SANATIZE INPUT?
         self.state.toChooser(self.text_ctrl_token.GetValue())
-
-# end of class wxFrameToken
