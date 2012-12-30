@@ -54,14 +54,14 @@ class wxFrameChooser(wx.Frame):
     def Setup(self, state):
         self.state = state
         # populate listbox
-        import pdb;pdb.set_trace()
+        # import pdb;pdb.set_trace()
         self.list_box_1.Set([x['name'] for x in self.state.target_list])
         self.button_chooser.Bind(wx.EVT_BUTTON, self.Submit)
 
     def Submit(self, event):
         # tell self.state which items were selected
         # self.state.selected_list
-        import pdb;pdb.set_trace()
+        # import pdb;pdb.set_trace()
         self.list_box_1.GetSelections() # set of id's, if zero selected?
         self.state.toOptions()
 
