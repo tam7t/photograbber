@@ -142,7 +142,10 @@ class PhotoGrabberGUI(wx.App):
         self.__nextFrame(wxFrameChooser(None, -1, ""))
 
     def toOptions(self):
-        self.__nextFrame(wxFrameOptions(None, -1, ""))
+        if self.targets is None or len(self.targets) == 0:
+            self.__errorDialog('You must select a target.')
+        else:
+            self.__nextFrame(wxFrameOptions(None, -1, ""))
 
     def toFolder(self):
         dir_dialog = wx.DirDialog(parent=self.current_frame,

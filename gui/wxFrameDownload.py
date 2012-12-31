@@ -42,6 +42,7 @@ class wxFrameDownload(wx.Frame):
     def Setup(self, state):
         self.state = state
         self.button_stop.Bind(wx.EVT_BUTTON, self.Quit)
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
 
     def Begin(self):
         # tell the main program to begin downloading
@@ -53,4 +54,9 @@ class wxFrameDownload(wx.Frame):
         self.Layout()
 
     def Quit(self, event):
-        exit()
+        self.Close()
+
+    def OnClose(self, event):
+        # notify app to hard close
+        import os
+        os._exit(1)
