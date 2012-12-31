@@ -41,6 +41,9 @@ helps['album'] = 'Download full albums.  Separate the object_id\'s of the albums
 helps['dir'] = 'Specify the directory to store the downloaded information. (Use with --target or --album)'
 helps['debug'] = 'Log extra debug information to pg.log'
 
+def print_func(text):
+    print text
+
 def main():
 
     # parse arguements
@@ -189,61 +192,15 @@ def main():
 
     # TODO: logger print caut options, logger duplicate print info's
 
-    # process each target
-    for target in args.target:
-        target_info = helper.get_info(target)
-        data = []
-        u_data = []
+    config = {}
+    config['dir'] = args.dir
+    config['targets'] = args.target
+    config['u'] = args.u
+    config['t'] = args.t
+    config['c'] = args.c
+    config['a'] = args.a
 
-        # get user uploaded photos
-        if args.u:
-            print 'Retrieving %s\'s album data...' % target
-            u_data = helper.get_albums(target, comments=args.c)
-
-        t_data = []
-        # get tagged
-        if args.t:
-            print 'Retrieving %s\'s tagged photo data...' % target
-            t_data = helper.get_tagged(target, comments=args.c, full=args.a)
-
-        if args.u and args.t:
-            # list of user ids
-            u_ids = [album['id'] for album in u_data]
-            # remove tagged albums if part of it is a user album
-            t_data = [album for album in t_data if album['id'] not in u_ids]
-
-        data.extend(u_data)
-        data.extend(t_data)
-
-        # download data
-        pool = multiprocessing.Pool(processes=5)
-
-        print 'Downloading photos'
-
-        for album in data:
-            # TODO: Error where 2 albums with same name exist
-            path = os.path.join(args.dir,unicode(target_info['name']))
-            pool.apply_async(downloader.save_album,
-                            (album,path)
-                            ) #callback=
-        pool.close()
-
-        logger.info('Waiting for childeren to finish')
-
-        while multiprocessing.active_children():
-            time.sleep(1)
-        pool.join()
-
-        logger.info('Child processes completed')
-
-        pics = 0
-        for album in data:
-            pics = pics + len(album['photos'])
-        logger.info('albums: %s' % len(data))
-        logger.info('pics: %s' % pics)
-        logger.info('rtt: %d' % graph.get_stats())
-
-        print 'Complete!'
+    helper.process(config, print_func)
 
 if __name__ == "__main__":
     main()
