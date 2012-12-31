@@ -238,6 +238,7 @@ class Helper(object):
         import downloader
         import multiprocessing
         import os
+        import time
 
         for target in targets:
             target_info = self.get_info(target)
@@ -247,7 +248,7 @@ class Helper(object):
             # get user uploaded photos
             if u:
                 update('Retrieving %s\'s album data...' % target)
-                u_data = self.get_albums(target, comments=args.c)
+                u_data = self.get_albums(target, comments=c)
 
             t_data = []
             # get tagged
