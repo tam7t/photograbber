@@ -235,6 +235,8 @@ class Helper(object):
         c = config['c']
         a = config['a']
 
+        self.logger.info("%s" % config)
+
         import downloader
         import multiprocessing
         import os
@@ -247,13 +249,13 @@ class Helper(object):
 
             # get user uploaded photos
             if u:
-                update('Retrieving %s\'s album data...' % target)
+                update('Retrieving %s\'s album data...' % target_info['name'])
                 u_data = self.get_albums(target, comments=c)
 
             t_data = []
             # get tagged
             if t:
-                update('Retrieving %s\'s tagged photo data...' % target)
+                update('Retrieving %s\'s tagged photo data...' % target_info['name'])
                 t_data = self.get_tagged(target, comments=c, full=a)
 
             if u and t:
@@ -278,7 +280,7 @@ class Helper(object):
                 # TODO: Error where 2 albums with same name exist
                 path = os.path.join(savedir,unicode(target_info['name']))
                 pool.apply_async(downloader.save_album,
-                                (album,path)
+                                (album,path,c)
                                 ) #callback=
             pool.close()
 
