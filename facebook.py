@@ -73,7 +73,7 @@ class GraphAPI(object):
     def __init__(self, access_token=None):
         self.access_token = access_token
         self.logger = logging.getLogger('facebook')
-        self.rtt = 0
+        self.rtt = 0 # round trip total
 
     def get_object(self, id, limit=500):
         """Get an entine object from the Graph API by paging over the requested
@@ -89,7 +89,7 @@ class GraphAPI(object):
         id: path to the object to retrieve
         limit: number of objects to retrieve in each page [max = 5000]
 
-        Returns False on OAuthException.
+        Returns [list|dictionary] or False on OAuthException.
         """
 
         data = []
@@ -101,6 +101,10 @@ class GraphAPI(object):
         # first request
         self.logger.info('retieving: %s' % id)
         response = self._request(id, args)
+
+        if response == False:
+            # OAuthException
+            return False
 
         if response.has_key('data'):
             # response is a list
@@ -139,7 +143,7 @@ class GraphAPI(object):
         finally:
             file.close()
         if response.get("error"):
-            raise GraphAPIError(response["error"]["type"],
+            raise GraphAPIError(response["error"]["code"],
                                 response["error"]["message"])
         return response
 
@@ -167,10 +171,12 @@ class GraphAPI(object):
         finally:
             file.close()
         if response.get("error"):
-            if repsponse["error"]["type"] == 190:
+            code = response["error"]["code"]
+            if code == 190 or code == 2500:
                 # abort on OAuthException
+                self.logger.error(response["error"]["message"])
                 return False
-            raise GraphAPIError(response["error"]["type"],
+            raise GraphAPIError(response["error"]["code"],
                                 response["error"]["message"])
         return response
 
@@ -206,15 +212,17 @@ class GraphAPI(object):
         return response
 
     def get_stats(self):
+        """Returns the number of HTTP requests performed by GraphAPI."""
         return self.rtt
 
     def reset_stats(self):
+        """Reset the number of HTTP requests performed by GraphAPI."""
         self.rtt = 0
 
 class GraphAPIError(Exception):
-    def __init__(self, type, message):
+    def __init__(self, code, message):
         Exception.__init__(self, message)
-        self.type = type
+        self.code = code
 
 ### photograbber specific ###
 

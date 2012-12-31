@@ -25,11 +25,12 @@ import re
 
 # download album methods for multiprocessing
 
-def save_album(album, path):
+def save_album(album, path, comments=False):
     """Process a full album.  Save data as JSON and download photos.
 
     album: full album data
     path: directory to save to albums
+    comments: write JSON and viewer.html if True
     """
 
     logger = logging.getLogger('save_album')
@@ -90,6 +91,10 @@ def save_album(album, path):
                     picout.close()
                     os.remove(pic_path)
                     retry = False
+
+    # exit funcion if no need to save metadata
+    if not comments:
+        return
 
     # save JSON file
     ts = time.strftime("%y-%m-%d_%H-%M-%S")
