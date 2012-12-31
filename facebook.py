@@ -171,7 +171,8 @@ class GraphAPI(object):
         finally:
             file.close()
         if response.get("error"):
-            if response["error"]["code"] == 190:
+            code = response["error"]["code"]
+            if code == 190 or code == 2500:
                 # abort on OAuthException
                 self.logger.error(response["error"]["message"])
                 return False
