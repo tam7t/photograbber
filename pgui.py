@@ -9,10 +9,46 @@ import facebook
 import helpers
 import downloader
 
-import time
 import logging
-import os
-import multiprocessing
+import threading
+
+
+myEVT_UPDATE_STATUS = wx.NewEventType()
+EVT_UPDATE_STATUS = wx.PyEventBinder(myEVT_UPDATE_STATUS, 1)
+
+class UpdateStatusEvent(wx.PyCommandEvent):
+    """Event to signal a status update is ready"""
+    def __init__(self, etype, eid, value=None):
+        """Creates the event object"""
+        wx.PyCommandEvent.__init__(self, etype, eid)
+        self._value = value
+
+    def GetValue(self):
+        """Returns the value form the event.
+
+        @return: the value of this event
+        """
+        return self._value
+
+class ProcessThread(threading.Thread):
+    def __init__(self, parent, config, helper):
+        """
+        @param parent: The gui object that should recieve updates
+        @param config: dictionary of download config
+        @param helper: facebook connnection
+        """
+        threading.Thread.__init__(self)
+        self._parent = parent
+        self._config = config
+        self._helper = helper
+
+    def run(self):
+        """Overrides Thread.run.  Called by Thread.start()."""
+        self._helper.process(self._config, self.update)
+
+    def update(self, text):
+        evt = UpdateStatusEvent(myEVT_UPDATE_STATUS, -1, text)
+        wx.PostEvent(self._parent, evt)
 
 class PhotoGrabberGUI(wx.App):
     """Control and Data Structure for GUI.
@@ -52,7 +88,6 @@ class PhotoGrabberGUI(wx.App):
         self.current_frame.Setup(self)
         self.SetTopWindow(self.current_frame)
         self.current_frame.Show()
-        print 'hi'
         return 1
 
     def __nextFrame(self, frame):
@@ -88,6 +123,7 @@ class PhotoGrabberGUI(wx.App):
     def toChooser(self):
         self.helper = helpers.Helper(facebook.GraphAPI(self.token))
 
+        # CODE BELOW BLOCKS, CREATE WORKER THREAD
         my_info = self.helper.get_me()
         if my_info == False:
             self.logger.error('Provided Token Failed: %s' % self.token)
@@ -98,6 +134,7 @@ class PhotoGrabberGUI(wx.App):
         self.target_list.extend(self.helper.get_friends('me'))
         self.target_list.extend(self.helper.get_pages('me'))
         self.target_list.extend(self.helper.get_subscriptions('me'))
+        # CODE ABOVE BLOCKS, CREAT WORKER THREAD
 
         # it is possible that there could be multiple 'Tommy Murphy'
         # make sure to download all different versions that get selected
@@ -126,64 +163,24 @@ class PhotoGrabberGUI(wx.App):
 
     def toDownload(self):
         self.__nextFrame(wxFrameDownload(None, -1, ""))
+        self.current_frame.Begin()
 
     def beginDownload(self, update):
         # TODO: problem - GUI blocked on this
         # process each target
-        for target in self.targets:
-            target_info = self.helper.get_info(target)
-            data = []
-            u_data = []
 
-            # get user uploaded photos
-            if self.u:
-                update('Retrieving %s\'s album data...' % target)
-                u_data = self.helper.get_albums(target, comments=self.c)
+        config = {}
+        config['dir'] = self.directory
+        config['targets'] = self.targets
+        config['u'] = self.u
+        config['t'] = self.t
+        config['c'] = self.c
+        config['a'] = self.a
 
-            t_data = []
-            # get tagged
-            if self.t:
-                update('Retrieving %s\'s tagged photo data...' % target)
-                t_data = self.helper.get_tagged(target, comments=self.c, full=self.a)
+        self.Bind(EVT_UPDATE_STATUS, update)
 
-            if self.u and self.t:
-                # list of user ids
-                u_ids = [album['id'] for album in u_data]
-                # remove tagged albums if part of it is a user album
-                t_data = [album for album in t_data if album['id'] not in u_ids]
-
-            data.extend(u_data)
-            data.extend(t_data)
-
-            # download data
-            pool = multiprocessing.Pool(processes=5)
-
-            update('Downloading photos')
-
-            for album in data:
-                # TODO: Error where 2 albums with same name exist
-                path = os.path.join(self.directory,unicode(target_info['name']))
-                pool.apply_async(downloader.save_album,
-                                (album,path)
-                                ) #callback=
-            pool.close()
-
-            self.logger.info('Waiting for childeren to finish')
-
-            while multiprocessing.active_children():
-                time.sleep(1)
-            pool.join()
-
-            self.logger.info('Child processes completed')
-
-            pics = 0
-            for album in data:
-                pics = pics + len(album['photos'])
-            self.logger.info('albums: %s' % len(data))
-            self.logger.info('pics: %s' % pics)
-            # self.logger.info('rtt: %d' % graph.get_stats())
-
-            update('Complete!')
+        worker = ProcessThread(self, config, self.helper)
+        worker.start()
 
 # end of class PhotoGrabberGUI
 

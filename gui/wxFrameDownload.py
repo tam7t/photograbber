@@ -42,12 +42,15 @@ class wxFrameDownload(wx.Frame):
     def Setup(self, state):
         self.state = state
         self.button_stop.Bind(wx.EVT_BUTTON, self.Quit)
+
+    def Begin(self):
         # tell the main program to begin downloading
         # provide pointer to Update() function to notify UI of download status
         self.state.beginDownload(self.Update)
 
     def Update(self, event):
-        self.label_status.SetLabel(event)
+        self.label_status.SetLabel(event.GetValue())
+        self.Layout()
 
     def Quit(self, event):
         exit()
