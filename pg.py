@@ -76,19 +76,27 @@ def main():
 
     logger = logging.getLogger('photograbber')
 
+    logger.info('Arguments parsed, logger configured.')
+
     # GUI
     if args.gui:
+        logger.info('Starting GUI.')
         import pgui
         pgui.start()
+        logger.info('GUI completed, exiting.')
         exit()
 
     # Login
     if args.token is None:
+        logger.info('No token provided.')
         browser = raw_input("Open Browser [y/n]: ")
         if browser == 'y':
+            logger.info('Opening default browser.')
             facebook.request_token()
             time.sleep(1)
         args.token = raw_input("Enter Token: ")
+
+    logger.info('Provided token: %s' % args.token)
 
     # TODO: check if token works, if not then quit
     graph = facebook.GraphAPI(args.token)
@@ -97,8 +105,9 @@ def main():
     # check if token works
     my_info = helper.get_me()
     if my_info == False:
-        # TODO: replace with logging.error
+        logger.error('Provided Token Failed: %s' % args.token)
         print 'Provided Token Failed: OAuthException'
+        exit()
 
     # --list-targets {'me','friends','pages','following','all'}
     target_list = []
@@ -117,12 +126,14 @@ def main():
         target_list.extend(helper.get_subscriptions('me'))
 
     if args.list_targets is not None:
+        logger.info('Listing available targets.')
         for target in target_list:
             print ('%(id)s:"%(name)s"' % target).encode('utf-8')
         return
 
     # --list_albums <object_id 1> ... <object_id n>
     if args.list_albums is not None:
+        logger.info('Listing available albums.')
         for target in args.list_albums:
             album_list = helper.get_album_list(target)
             for album in album_list:
@@ -138,8 +149,11 @@ def main():
     else:
         args.dir = unicode(args.dir)
 
+    logger.info('Download Location: %s' % args.dir)
+
     # --album <object_id 1> ... <object_id n>
     if args.album is not None:
+        logger.info('Downloading albums.')
         for album in args.album:
             # note, doesnt manually ask for caut options for album
             print 'Retrieving album data: %s...' % album
@@ -172,6 +186,8 @@ def main():
                 args.c = True
             if 'a' in opt_str:
                 args.a = True
+
+    # TODO: logger print caut options, logger duplicate print info's
 
     # process each target
     for target in args.target:
