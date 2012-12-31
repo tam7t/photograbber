@@ -46,7 +46,7 @@ def repeat(func, n=10, standoff=1.5):
             try:
                 return func(*args, **kwargs)
             except Exception, e:
-                logger.error('failed function: %s' % e)
+                logger.exception('failed function: %s' % e)
                 if retries < n:
                     retries += 1
                     time.sleep(retries * standoff)
