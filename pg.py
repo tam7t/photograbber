@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
 # Copyright (C) 2012  Ourbunny
 #
@@ -40,6 +41,9 @@ helps['album'] = 'Download full albums.  Separate the object_id\'s of the albums
 helps['dir'] = 'Specify the directory to store the downloaded information. (Use with --target or --album)'
 helps['debug'] = 'Log extra debug information to pg.log'
 
+def print_func(text):
+    print text
+
 def main():
 
     # parse arguements
@@ -75,13 +79,27 @@ def main():
 
     logger = logging.getLogger('photograbber')
 
+    logger.info('Arguments parsed, logger configured.')
+
+    # GUI
+    if args.gui:
+        logger.info('Starting GUI.')
+        import pgui
+        pgui.start()
+        logger.info('GUI completed, exiting.')
+        exit()
+
     # Login
     if args.token is None:
+        logger.info('No token provided.')
         browser = raw_input("Open Browser [y/n]: ")
         if browser == 'y':
+            logger.info('Opening default browser.')
             facebook.request_token()
             time.sleep(1)
         args.token = raw_input("Enter Token: ")
+
+    logger.info('Provided token: %s' % args.token)
 
     # TODO: check if token works, if not then quit
     graph = facebook.GraphAPI(args.token)
@@ -90,8 +108,9 @@ def main():
     # check if token works
     my_info = helper.get_me()
     if my_info == False:
-        # TODO: replace with logging.error
+        logger.error('Provided Token Failed: %s' % args.token)
         print 'Provided Token Failed: OAuthException'
+        exit()
 
     # --list-targets {'me','friends','pages','following','all'}
     target_list = []
@@ -110,12 +129,14 @@ def main():
         target_list.extend(helper.get_subscriptions('me'))
 
     if args.list_targets is not None:
+        logger.info('Listing available targets.')
         for target in target_list:
             print ('%(id)s:"%(name)s"' % target).encode('utf-8')
         return
 
     # --list_albums <object_id 1> ... <object_id n>
     if args.list_albums is not None:
+        logger.info('Listing available albums.')
         for target in args.list_albums:
             album_list = helper.get_album_list(target)
             for album in album_list:
@@ -131,8 +152,11 @@ def main():
     else:
         args.dir = unicode(args.dir)
 
+    logger.info('Download Location: %s' % args.dir)
+
     # --album <object_id 1> ... <object_id n>
     if args.album is not None:
+        logger.info('Downloading albums.')
         for album in args.album:
             # note, doesnt manually ask for caut options for album
             print 'Retrieving album data: %s...' % album
@@ -166,61 +190,17 @@ def main():
             if 'a' in opt_str:
                 args.a = True
 
-    # process each target
-    for target in args.target:
-        target_info = helper.get_info(target)
-        data = []
-        u_data = []
+    # TODO: logger print caut options, logger duplicate print info's
 
-        # get user uploaded photos
-        if args.u:
-            print 'Retrieving %s\'s album data...' % target
-            u_data = helper.get_albums(target, comments=args.c)
+    config = {}
+    config['dir'] = args.dir
+    config['targets'] = args.target
+    config['u'] = args.u
+    config['t'] = args.t
+    config['c'] = args.c
+    config['a'] = args.a
 
-        t_data = []
-        # get tagged
-        if args.t:
-            print 'Retrieving %s\'s tagged photo data...' % target
-            t_data = helper.get_tagged(target, comments=args.c, full=args.a)
-
-        if args.u and args.t:
-            # list of user ids
-            u_ids = [album['id'] for album in u_data]
-            # remove tagged albums if part of it is a user album
-            t_data = [album for album in t_data if album['id'] not in u_ids]
-
-        data.extend(u_data)
-        data.extend(t_data)
-
-        # download data
-        pool = multiprocessing.Pool(processes=5)
-
-        print 'Downloading photos'
-
-        for album in data:
-            # TODO: Error where 2 albums with same name exist
-            path = os.path.join(args.dir,unicode(target_info['name']))
-            pool.apply_async(downloader.save_album,
-                            (album,path)
-                            ) #callback=
-        pool.close()
-
-        logger.info('Waiting for childeren to finish')
-
-        while multiprocessing.active_children():
-            time.sleep(1)
-        pool.join()
-
-        logger.info('Child processes completed')
-
-        pics = 0
-        for album in data:
-            pics = pics + len(album['photos'])
-        logger.info('albums: %s' % len(data))
-        logger.info('pics: %s' % pics)
-        logger.info('rtt: %d' % graph.get_stats())
-
-        print 'Complete!'
+    helper.process(config, print_func)
 
 if __name__ == "__main__":
     main()

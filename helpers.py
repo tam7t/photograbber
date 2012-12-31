@@ -82,13 +82,16 @@ class Helper(object):
         return self.graph.get_object('%s' % id)
 
     def get_friends(self, id):
-        return self.graph.get_object('%s/friends' % id, 5000)
+        data = self.graph.get_object('%s/friends' % id, 5000)
+        return sorted(data, key=lambda k:k['name'].lower())
 
     def get_subscriptions(self, id):
-        return self.graph.get_object('%s/subscribedto' % id, 5000)
+        data = self.graph.get_object('%s/subscribedto' % id, 5000)
+        return sorted(data, key=lambda k:k['name'].lower())
 
     def get_pages(self, id):
-        return self.graph.get_object('%s/likes' % id, 5000)
+        data = self.graph.get_object('%s/likes' % id, 5000)
+        return sorted(data, key=lambda k:k['name'].lower())
 
     # return the list of album information that id has uploaded
 
@@ -221,3 +224,74 @@ class Helper(object):
         data = [album for album in data if album is not None]
 
         return data
+
+    def process(self, config, update):
+        """Collect all necessary information and download all files"""
+
+        savedir = config['dir']
+        targets = config['targets']
+        u = config['u']
+        t = config['t']
+        c = config['c']
+        a = config['a']
+
+        self.logger.info("%s" % config)
+
+        import downloader
+        import multiprocessing
+        import os
+        import time
+
+        for target in targets:
+            target_info = self.get_info(target)
+            data = []
+            u_data = []
+
+            # get user uploaded photos
+            if u:
+                update('Retrieving %s\'s album data...' % target_info['name'])
+                u_data = self.get_albums(target, comments=c)
+
+            t_data = []
+            # get tagged
+            if t:
+                update('Retrieving %s\'s tagged photo data...' % target_info['name'])
+                t_data = self.get_tagged(target, comments=c, full=a)
+
+            if u and t:
+                # list of user ids
+                u_ids = [album['id'] for album in u_data]
+                # remove tagged albums if part of it is a user album
+                t_data = [album for album in t_data if album['id'] not in u_ids]
+
+            data.extend(u_data)
+            data.extend(t_data)
+
+            # download data
+            pool = multiprocessing.Pool(processes=5)
+
+            pics = 0
+            for album in data:
+                pics = pics + len(album['photos'])
+
+            update('Downloading %d photos...' % pics)
+
+            for album in data:
+                # TODO: Error where 2 albums with same name exist
+                path = os.path.join(savedir,unicode(target_info['name']))
+                pool.apply_async(downloader.save_album,
+                                (album,path,c)
+                                ) #callback=
+            pool.close()
+
+            self.logger.info('Waiting for childeren to finish')
+
+            while multiprocessing.active_children():
+                time.sleep(1)
+            pool.join()
+
+            self.logger.info('Child processes completed')
+            self.logger.info('albums: %s' % len(data))
+            self.logger.info('pics: %s' % pics)
+
+            update('%d photos downloaded!' % pics)
