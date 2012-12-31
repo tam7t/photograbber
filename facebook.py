@@ -167,7 +167,7 @@ class GraphAPI(object):
         finally:
             file.close()
         if response.get("error"):
-            if repsponse["error"]["type"] == 190:
+            if response["error"]["type"] == 190:
                 # abort on OAuthException
                 return False
             raise GraphAPIError(response["error"]["type"],
