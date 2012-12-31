@@ -52,4 +52,8 @@ class wxFrameOptions(wx.Frame):
         self.button_options.Bind(wx.EVT_BUTTON, self.Submit)
 
     def Submit(self, event):
+        self.state.t = self.checkbox_1.GetValue()
+        self.state.a = self.checkbox_2.GetValue()
+        self.state.u = self.checkbox_3.GetValue()
+        self.state.c = self.checkbox_4.GetValue()
         self.state.toFolder()

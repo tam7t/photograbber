@@ -47,4 +47,5 @@ class wxFrameToken(wx.Frame):
 
     def Submit(self, event):
         # TODO SANATIZE INPUT?
-        self.state.toChooser(self.text_ctrl_token.GetValue())
+        self.state.token = self.text_ctrl_token.GetValue()
+        self.state.toChooser()

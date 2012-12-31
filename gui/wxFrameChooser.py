@@ -54,5 +54,8 @@ class wxFrameChooser(wx.Frame):
         # tell self.state which items were selected
         # self.state.selected_list
         # import pdb;pdb.set_trace()
-        self.list_box_1.GetSelections() # set of id's, if zero selected?
+        self.state.targets = []
+        for id in self.list_box_1.GetSelections():
+            self.state.targets.append(self.state.target_list[id]['id'])
+
         self.state.toOptions()

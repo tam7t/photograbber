@@ -10,7 +10,7 @@ class wxFrameDownload(wx.Frame):
         wx.Frame.__init__(self, *args, **kwds)
         self.panel_5 = wx.Panel(self, -1)
         self.label_status = wx.StaticText(self.panel_5, -1, "\n\nStatus", style=wx.ALIGN_CENTRE)
-        self.button_stop = wx.Button(self.panel_5, -1, "button_1")
+        self.button_stop = wx.Button(self.panel_5, -1, "Quit")
 
         self.__set_properties()
         self.__do_layout()
@@ -42,10 +42,12 @@ class wxFrameDownload(wx.Frame):
     def Setup(self, state):
         self.state = state
         self.button_stop.Bind(wx.EVT_BUTTON, self.Quit)
-        self.state.beginDownload()
+        # tell the main program to begin downloading
+        # provide pointer to Update() function to notify UI of download status
+        self.state.beginDownload(self.Update)
 
     def Update(self, event):
-        self.label_state.SetValue(event)
+        self.label_status.SetLabel(event)
 
     def Quit(self, event):
         exit()
