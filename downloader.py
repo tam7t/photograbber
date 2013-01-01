@@ -36,7 +36,15 @@ def save_album(album, path, comments=False):
     logger = logging.getLogger('save_album')
 
     # recursively make path
-    REPLACE_RE = re.compile(r'\*|"|\'|:|<|>|\?|\\|/|\|,|\|| ')
+    # http://serverfault.com/questions/242110/which-common-charecters-are-illegal-in-unix-and-windows-filesystems
+    #
+    # NULL and / are not valid on EXT3
+    # < > : " / \ | ? * are not valid Windows
+    # prohibited characters in order:
+    #   * " : < > ? \ / , NULL
+    #
+    #   '\*|"|:|<|>|\?|\\|/|,|'
+    REPLACE_RE = re.compile(r'\*|"|:|<|>|\?|\\|/|,')
     folder = unicode(album['name'])
     folder = REPLACE_RE.sub('_', folder)
     path = os.path.join(path, folder)
