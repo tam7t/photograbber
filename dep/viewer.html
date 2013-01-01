@@ -107,7 +107,7 @@ set_selection = function(thumb) {
 
     // heading
     var title = document.createElement("h1");
-    if (al['photos'][pid]['caption'] != "") {
+    if (typeof al['photos'][pid]['caption'] != 'undefined') {
         // fix: find how to figure out the caption
         title.innerHTML = "<h1>" + al['photos'][pid]['caption'] + "</h1>";
     } else {
@@ -135,9 +135,9 @@ set_selection = function(thumb) {
         tagdiv.innerHTML = "<strong>Tagged:</strong> ";
         mydiv.appendChild(tagdiv);
 
-        for (tag in al['photos'][pid]['tags']) {
+        for (tag in al['photos'][pid]['tags']['data']) {
             var thetag = document.createElement('a');
-            thetag.innerHTML = al['photos'][pid]['tags'][tag]['text'];
+            thetag.innerHTML = al['photos'][pid]['tags']['data'][tag]['name'];
             thetag.href="#";
             var elem = {};
             elem.tag = tag;
@@ -170,8 +170,8 @@ function tagit(e, elem) {
     var tb = document.getElementById('box');
     tb.position = 'absolute';
     // fix
-    tb.style.left = '' + (tp.offsetLeft - 70 + (al['photos'][pid]['tags'][tag]['xcoord']/100) * tp.offsetWidth) + 'px';
-    tb.style.top = '' + (tp.offsetTop - 70 + (al['photos'][pid]['tags'][tag]['ycoord']/100) * tp.offsetHeight) + 'px';
+    tb.style.left = '' + (tp.offsetLeft - 70 + (al['photos'][pid]['tags']['data'][tag]['x']/100) * tp.offsetWidth) + 'px';
+    tb.style.top = '' + (tp.offsetTop - 70 + (al['photos'][pid]['tags']['data'][tag]['y']/100) * tp.offsetHeight) + 'px';
     tb.style.display = "block";
 }
 

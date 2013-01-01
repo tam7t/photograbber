@@ -26,9 +26,10 @@ a PhotoGrabber release.
 Bryce Boe - bryceboe.com
 
 ## TODO
-  * add wxPython GUI
+  * eliminate app login from wx GUI code
+  * prevent use from accidentally pressing a button twice
+  * make code/comments uniform
   * split up downloader function and utilize @repeat decorator
   * cleanup path names to work with unicode on multiple filesystems
-  * add missing fields to viewer.html
   * add packaging details
 
