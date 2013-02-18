@@ -1,6 +1,5 @@
-#!/usr/bin/env python
-#
 # Copyright 2010 Facebook
+# Copyright 2013 Ourbunny
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may obtain
@@ -14,7 +13,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 #
-# Modified for photograbber by Tommy Murphy, ourbunny.com
+# Modified for PhotoGrabber by Tommy Murphy, ourbunny.com
 
 """Python client library for the Facebook Platform.
 
@@ -25,25 +24,11 @@ http://developers.facebook.com/docs/api. You can download the Facebook
 JavaScript SDK at http://github.com/facebook/connect-js/.
 """
 
-import cgi
-import hashlib
 import time
 import urllib
 import logging
-from repeater import repeat
-
-# Find a JSON parser
-try:
-    import json
-    _parse_json = lambda s: json.loads(s)
-except ImportError:
-    try:
-        import simplejson
-        _parse_json = lambda s: simplejson.loads(s)
-    except ImportError:
-        # For Google AppEngine
-        from django.utils import simplejson
-        _parse_json = lambda s: simplejson.loads(s)
+import repeater
+import json
 
 class GraphAPI(object):
     """A client for the Facebook Graph API.
@@ -93,17 +78,17 @@ class GraphAPI(object):
         """
 
         data = []
-        has_more = True
 
         args = {}
         args["limit"] = limit
 
         # first request
         self.logger.info('retieving: %s' % id)
-        response = self._request(id, args)
 
-        if response == False:
-            # OAuthException
+        try:
+            response = self._request(id, args)
+        except repeater.DoNotRepeatError as e:
+            logger.error(e)
             return False
 
         if response.has_key('data'):
@@ -128,7 +113,7 @@ class GraphAPI(object):
 
         return data
 
-    @repeat
+    @repeater.repeat
     def _follow(self, path):
         """Follow a graph API path."""
 
@@ -138,7 +123,7 @@ class GraphAPI(object):
         self.rtt = self.rtt+1
 
         try:
-            response = _parse_json(file.read())
+            response = json.loads(file.read())
             self.logger.debug(json.dumps(response, indent=4))
         finally:
             file.close()
@@ -147,7 +132,7 @@ class GraphAPI(object):
                                 response["error"]["message"])
         return response
 
-    @repeat
+    @repeater.repeat
     def _request(self, path, args=None):
         """Fetches the given path in the Graph API."""
 
@@ -166,7 +151,7 @@ class GraphAPI(object):
         self.rtt = self.rtt+1
 
         try:
-            response = _parse_json(file.read())
+            response = json.loads(file.read())
             self.logger.debug(json.dumps(response, indent=4))
         finally:
             file.close()
@@ -180,7 +165,7 @@ class GraphAPI(object):
                                 response["error"]["message"])
         return response
 
-    @repeat
+    @repeater.repeat
     def fql(self, query):
         """Execute an FQL query."""
 
@@ -200,7 +185,7 @@ class GraphAPI(object):
         self.rtt = self.rtt+1
 
         try:
-            response = _parse_json(file.read())
+            response = json.loads(file.read())
             self.logger.debug(json.dumps(response, indent=4))
             if type(response) is dict and "error_code" in response:
                 raise GraphAPIError(response["error_code"],
@@ -219,23 +204,22 @@ class GraphAPI(object):
         """Reset the number of HTTP requests performed by GraphAPI."""
         self.rtt = 0
 
+
 class GraphAPIError(Exception):
     def __init__(self, code, message):
         Exception.__init__(self, message)
         self.code = code
 
-### photograbber specific ###
-
-import webbrowser
-
-CLIENT_ID = "139730900025"
-RETURN_URL = "http://faceauth.appspot.com/"
-SCOPE = ''.join(['user_photos,',
-                 'friends_photos,',
-                 'user_likes'])
-
 def request_token():
     """Prompt the user to login to facebook and obtain an OAuth token."""
+
+    import webbrowser
+
+    CLIENT_ID = "139730900025"
+    RETURN_URL = "http://faceauth.appspot.com/"
+    SCOPE = ''.join(['user_photos,',
+                     'friends_photos,',
+                     'user_likes'])
 
     url = ''.join(['https://graph.facebook.com/oauth/authorize?',
                    'client_id=%(cid)s&',

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2012  Ourbunny
+# Copyright 2013 Ourbunny
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -24,7 +24,6 @@ import argparse
 import time
 import logging
 import os
-import multiprocessing
 
 # help strings
 helps = {}
@@ -107,7 +106,7 @@ def main():
 
     # check if token works
     my_info = helper.get_me()
-    if my_info == False:
+    if not my_info:
         logger.error('Provided Token Failed: %s' % args.token)
         print 'Provided Token Failed: OAuthException'
         exit()
@@ -171,8 +170,8 @@ def main():
         args.target.append(raw_input("Target: "))
 
     # get options
-    if args.c is False and args.a is False:
-        if args.u is False and args.t is False:
+    if not args.c and not args.a:
+        if not args.u and not args.t:
             print ''
             print 'Options'
             print '-------'

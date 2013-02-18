@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-#
 # Copyright (C) 2012 Ourbunny
 #
 # This program is free software: you can redistribute it and/or modify
@@ -17,6 +15,9 @@
 
 import logging
 import time
+
+# raise DoNotRepeatError in a function to force repeat() to exit prematurely
+class DoNotRepeatError(Exception): pass
 
 # function repeater decorator
 def repeat(func, n=10, standoff=1.5):
@@ -45,7 +46,9 @@ def repeat(func, n=10, standoff=1.5):
         while True:
             try:
                 return func(*args, **kwargs)
-            except Exception, e:
+            except DoNotRepeate:
+                raise
+            except Exception as e:
                 logger.exception('failed function: %s' % e)
                 if retries < n:
                     retries += 1
