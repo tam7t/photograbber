@@ -1,10 +1,8 @@
 # PhotoGrabber
-A cross platform desktop application to backup images from facebook.  This repo
-holds an experimental build that makes use of the Graph API, provides a command
-line interface, and uses the wxPython GUI toolkit.
+A cross platform desktop application to backup images from Facebook.
 
 ## License
-Copyright (R) 2012 Ourbunny
+Copyright (C) 2013 Ourbunny
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,17 +17,14 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+## Dependencies
+
+* facebook-sdk (Apache 2.0)
+* [PySide](http://qt-project.org/wiki/Category:LanguageBindings::PySide) (LGPL v2.1) 
+* [Qt](http://qt-project.org) (LGPL v2.1) 
+
 ## Contributors
 The following individuals have provided code patches that have been included in
 a PhotoGrabber release.
 
-Bryce Boe - bryceboe.com
-
-## TODO
-  * eliminate app login from wx GUI code
-  * prevent use from accidentally pressing a button twice
-  * make code/comments uniform
-  * split up downloader function and utilize @repeat decorator
-  * cleanup path names to work with unicode on multiple filesystems
-  * add packaging details
-
+Bryce Boe - [bryceboe.com](http://bryceboe.com)
