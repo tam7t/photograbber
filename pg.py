@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2012  Ourbunny
+# Copyright (C) 2013 Ourbunny
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -24,7 +24,6 @@ import argparse
 import time
 import logging
 import os
-import multiprocessing
 
 # help strings
 helps = {}
@@ -36,7 +35,7 @@ helps['gui'] =  'Use wx based GUI'
 helps['token'] = 'Specify the OAuth token used to authenticate with Facebook.'
 helps['list-targets'] ='Display names and object_id\'s of potential targets'
 helps['list-albums'] = 'List the albums uploaded by a target.  Separate the object_id\'s of targets with spaces.'
-helps['target'] = 'Download targets. Separate the object_id\'s of people or pages with spaces.'
+helps['target'] = 'Download targets. Separate the object_id\'s of people or likes with spaces.'
 helps['album'] = 'Download full albums.  Separate the object_id\'s of the albums with spaces.'
 helps['dir'] = 'Specify the directory to store the downloaded information. (Use with --target or --album)'
 helps['debug'] = 'Log extra debug information to pg.log'
@@ -45,12 +44,11 @@ def print_func(text):
     print text
 
 def main():
-
     # parse arguements
     parser = argparse.ArgumentParser(description="Download Facebook photos.")
     parser.add_argument('--gui', action='store_true', help=helps['gui'])
     parser.add_argument('--token', help=helps['token'])
-    parser.add_argument('--list-targets', choices=('me','friends','pages','following','all'), help=helps['list-targets'])
+    parser.add_argument('--list-targets', choices=('me','friends','likes','following','all'), help=helps['list-targets'])
     parser.add_argument('--list-albums', nargs='+', help=helps['list-albums'])
     parser.add_argument('--target', nargs='+', help=helps['target'])
     parser.add_argument('-u', action='store_true', help=helps['u'])
@@ -107,25 +105,25 @@ def main():
 
     # check if token works
     my_info = helper.get_me()
-    if my_info == False:
+    if not my_info:
         logger.error('Provided Token Failed: %s' % args.token)
         print 'Provided Token Failed: OAuthException'
         exit()
 
-    # --list-targets {'me','friends','pages','following','all'}
+    # --list-targets {'me','friends','likes','following','all'}
     target_list = []
     if args.list_targets == 'me':
         target_list.append(my_info)
     elif args.list_targets == 'friends':
         target_list.extend(helper.get_friends('me'))
-    elif args.list_targets == 'pages':
-        target_list.extend(helper.get_pages('me'))
+    elif args.list_targets == 'likes':
+        target_list.extend(helper.get_likes('me'))
     elif args.list_targets == 'following':
         target_list.extend(helper.get_subscriptions('me'))
     elif args.list_targets == 'all':
         target_list.append(my_info)
         target_list.extend(helper.get_friends('me'))
-        target_list.extend(helper.get_pages('me'))
+        target_list.extend(helper.get_likes('me'))
         target_list.extend(helper.get_subscriptions('me'))
 
     if args.list_targets is not None:
@@ -171,8 +169,8 @@ def main():
         args.target.append(raw_input("Target: "))
 
     # get options
-    if args.c is False and args.a is False:
-        if args.u is False and args.t is False:
+    if not args.c and not args.a:
+        if not args.u and not args.t:
             print ''
             print 'Options'
             print '-------'

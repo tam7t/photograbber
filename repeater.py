@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
-# Copyright (C) 2012 Ourbunny
+# Copyright (C) 2013 Ourbunny
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,25 +18,59 @@
 import logging
 import time
 
+# raise DoNotRepeatError in a function to force repeat() to exit prematurely
+class DoNotRepeatError(Exception):
+    def __init__(self, error):
+        Exception.__init__(self, error.message)
+        self.error = error
+
 # function repeater decorator
 def repeat(func, n=10, standoff=1.5):
     """Execute a function repeatedly until success.
 
-        @repeat
-        def fail():
-            print 'try fail...'
-            throw new Exception()
+    Args:
+        func (function): The function to repeat
 
-        @repeat
-        def pass():
-            print 'pass'
+    Kwargs:
+        n (int): The number of times to repeate the function before raising an error
+        standoff (float): Multiplier increment to wait between retrying the function
 
-        fail()
-        pass()
+    >>>import repeater.repeat
 
-    func: pointer to function
-    n: retry the call <n> times before raising an error
-    standoff: multiplier increment for each standoff
+    >>>@repeater.repeat
+    >>>def fail():
+    >>>    print 'A'
+    >>>    raise Exception()
+    >>>    print 'B'
+
+    >>>@repeater.repeat
+    >>>    def pass():
+    >>>    print 'B'
+
+    >>>@repeater.repeat
+    >>>def failpass():
+    >>>    print 'C'
+    >>>    raise repeater.DoNotRepeatError(Exception())
+    >>>    print 'D'
+
+    >>>fail() # prints 'A' 10 times, failing each time
+    A
+    A
+    A
+    A
+    A
+    A
+    A
+    A
+    A
+    A
+
+    >>>pass() # prints 'B' once, succeeding on first try
+    B
+
+    >>>failpass() # prints 'C' once, then fails
+    C
+
     """
 
     def wrapped(*args, **kwargs):
@@ -45,7 +79,10 @@ def repeat(func, n=10, standoff=1.5):
         while True:
             try:
                 return func(*args, **kwargs)
-            except Exception, e:
+            except DoNotRepeate as e:
+                # raise the exception that caused funciton failure
+                raise e.error
+            except Exception as e:
                 logger.exception('failed function: %s' % e)
                 if retries < n:
                     retries += 1

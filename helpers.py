@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
-# Copyright (C) 2012 Ourbunny
+# Copyright (C) 2013 Ourbunny
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@ class Helper(object):
         helper = helpers.Helper(graph)
         helper.get_friends(id)
         helper.get_subscriptions(id)
-        helper.get_pages(id)
+        helper.get_likes(id)
         helper.get_albums(id)
         helper.get_tagged(id)
         helper.get_tagged_albums(id)
@@ -61,7 +61,7 @@ class Helper(object):
             new_ids = self.graph.fql(q % pids)
             try:
                 new_ids = [x['object_id'] for x in new_ids]
-            except Exception,e:
+            except Exception as e:
                 self.logger.error('no album access')
                 self.logger.error('%s' % e)
                 bad_query = q % pids
@@ -89,7 +89,7 @@ class Helper(object):
         data = self.graph.get_object('%s/subscribedto' % id, 5000)
         return sorted(data, key=lambda k:k['name'].lower())
 
-    def get_pages(self, id):
+    def get_likes(self, id):
         data = self.graph.get_object('%s/likes' % id, 5000)
         return sorted(data, key=lambda k:k['name'].lower())
 
@@ -112,6 +112,8 @@ class Helper(object):
     def _fill_album(self, album, comments):
         """Takes an already loaded album and fills out the photos and
         comments"""
+
+        # album must be dictionary, with 'photos'
 
         # get comments
         if comments and 'comments' in album:
@@ -157,8 +159,6 @@ class Helper(object):
             return album
 
         album = self.graph.get_object('%s' % id)
-        if type(album) is not dict:
-            import pdb;pdb.set_trace()
         return self._fill_album(album, comments)
 
     def get_albums(self, id, comments=False):
