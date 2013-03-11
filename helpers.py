@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+#
 # Copyright (C) 2013 Ourbunny
 #
 # This program is free software: you can redistribute it and/or modify

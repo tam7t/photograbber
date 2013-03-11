@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+#
 # Copyright 2010 Facebook
 # Copyright 2013 Ourbunny (modified for PhotoGrabber)
 #
