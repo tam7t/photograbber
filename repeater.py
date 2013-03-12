@@ -79,7 +79,7 @@ def repeat(func, n=10, standoff=1.5):
         while True:
             try:
                 return func(*args, **kwargs)
-            except DoNotRepeate as e:
+            except DoNotRepeatError as e:
                 # raise the exception that caused funciton failure
                 raise e.error
             except Exception as e:
