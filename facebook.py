@@ -147,6 +147,7 @@ class GraphAPI(object):
                     raise repeater.DoNotRepeatError(e)
                 else:
                     # raise original GraphAPIError (and try again)
+                    self.logger.error('GET: %s failed' % path)
                     raise
 
         return response
@@ -185,6 +186,7 @@ class GraphAPI(object):
                     raise repeater.DoNotRepeatError(e)
                 else:
                     # raise original GraphAPIError (and try again)
+                    self.logger.error('GET: %s failed' % path)
                     raise
 
         return response
@@ -213,6 +215,7 @@ class GraphAPI(object):
             self.logger.debug(json.dumps(response, indent=4)) #ValueError, IOError
             if type(response) is dict and "error_code" in response:
                 # add do not repeate error
+                self.logger.error('GET: %s failed' % path)
                 raise GraphAPIError(response["error_code"],
                                     response["error_msg"])
         finally:
