@@ -41,12 +41,12 @@ helps['dir'] = 'Specify the directory to store the downloaded information. (Use 
 helps['debug'] = 'Log extra debug information to pg.log'
 
 def print_func(text):
-    print text
+    if text: print text
 
 def main():
     # parse arguements
     parser = argparse.ArgumentParser(description="Download Facebook photos.")
-    parser.add_argument('--gui', action='store_true', help=helps['gui'])
+    parser.add_argument('--cmd', action='store_true', help=helps['cmd'])
     parser.add_argument('--token', help=helps['token'])
     parser.add_argument('--list-targets', choices=('me','friends','likes','following','all'), help=helps['list-targets'])
     parser.add_argument('--list-albums', nargs='+', help=helps['list-albums'])
@@ -80,7 +80,7 @@ def main():
     logger.info('Arguments parsed, logger configured.')
 
     # GUI
-    if args.gui:
+    if not args.cmd:
         logger.info('Starting GUI.')
         import pgui
         pgui.start()

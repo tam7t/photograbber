@@ -39,6 +39,9 @@ class Helper(object):
     def __init__(self, graph=None):
         self.graph = graph
         self.logger = logging.getLogger('helper')
+        
+    def update(self, text):
+        pass
 
     def find_album_ids(self, picture_ids):
         """Find the albums that contains pictures.
@@ -57,6 +60,7 @@ class Helper(object):
 
         # split query into 25 pictures at a time
         for i in range(len(picture_ids) / 25 + 1):
+            self.update(None)
             pids = ','.join(picture_ids[i * 25:(i+1) * 25])
             new_ids = self.graph.fql(q % pids)
             try:
@@ -82,20 +86,24 @@ class Helper(object):
         return self.graph.get_object('%s' % id)
 
     def get_friends(self, id):
+        self.update(None)
         data = self.graph.get_object('%s/friends' % id, 5000)
         return sorted(data, key=lambda k:k['name'].lower())
 
     def get_subscriptions(self, id):
+        self.update(None)
         data = self.graph.get_object('%s/subscribedto' % id, 5000)
         return sorted(data, key=lambda k:k['name'].lower())
 
     def get_likes(self, id):
+        self.update(None)
         data = self.graph.get_object('%s/likes' % id, 5000)
         return sorted(data, key=lambda k:k['name'].lower())
 
     # return the list of album information that id has uploaded
 
     def get_album_list(self, id):
+        self.update(None)
         return self.graph.get_object('%s/albums' % id)
 
     # The following methods return a list of albums & photos
@@ -119,15 +127,18 @@ class Helper(object):
         if comments and 'comments' in album:
             if len(album['comments']) >= 25:
                 album['comments'] = self.graph.get_object('%s/comments' % album['id'])
+                self.update(None)
 
         # get album photos
         album['photos'] = self.graph.get_object('%s/photos' % album['id'])
+        self.update(None)
 
         if len(album['photos']) == 0:
             self.logger.error('album had zero photos: %s' % album['id'])
             return None
 
         for photo in album['photos']:
+            self.update(None)
             # get picture comments
             if comments and 'comments' in photo:
                 n_before = len(photo['comments']['data'])
@@ -159,6 +170,7 @@ class Helper(object):
             return album
 
         album = self.graph.get_object('%s' % id)
+        self.update(None)
         return self._fill_album(album, comments)
 
     def get_albums(self, id, comments=False):
@@ -171,6 +183,7 @@ class Helper(object):
         self.logger.info('albums: %d' % len(data))
 
         for album in data:
+            self.update(None)
             album = self._fill_album(album, comments)
 
         # remove empty albums
@@ -234,6 +247,8 @@ class Helper(object):
         t = config['t']
         c = config['c']
         a = config['a']
+        
+        self.update = update
 
         self.logger.info("%s" % config)
 
@@ -249,13 +264,13 @@ class Helper(object):
 
             # get user uploaded photos
             if u:
-                update('Retrieving %s\'s album data...' % target_info['name'])
+                self.update('Retrieving %s\'s album data...' % target_info['name'])
                 u_data = self.get_albums(target, comments=c)
 
             t_data = []
             # get tagged
             if t:
-                update('Retrieving %s\'s tagged photo data...' % target_info['name'])
+                self.update('Retrieving %s\'s tagged photo data...' % target_info['name'])
                 t_data = self.get_tagged(target, comments=c, full=a)
 
             if u and t:
@@ -274,7 +289,7 @@ class Helper(object):
             for album in data:
                 pics = pics + len(album['photos'])
 
-            update('Downloading %d photos...' % pics)
+            self.update('Downloading %d photos...' % pics)
 
             for album in data:
                 # TODO: Error where 2 albums with same name exist
@@ -287,11 +302,13 @@ class Helper(object):
             self.logger.info('Waiting for childeren to finish')
 
             while multiprocessing.active_children():
-                time.sleep(1)
+                time.sleep(0.1)
+                self.update(None)
+
             pool.join()
 
             self.logger.info('Child processes completed')
             self.logger.info('albums: %s' % len(data))
             self.logger.info('pics: %s' % pics)
 
-            update('%d photos downloaded!' % pics)
+            self.update('%d photos downloaded!' % pics)
