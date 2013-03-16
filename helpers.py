@@ -302,7 +302,6 @@ class Helper(object):
             self.update('Downloading %d photos...' % pics)
 
             for album in data:
-                # TODO: Error where 2 albums with same name exist
                 path = os.path.join(savedir,unicode(target_info['name']))
                 pool.apply_async(downloader.save_album,
                                 (album,path,c)
