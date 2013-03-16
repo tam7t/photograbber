@@ -16,6 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
+import collections
 
 class Helper(object):
     """Helper functions for retrieving Facebook data.
@@ -281,6 +282,15 @@ class Helper(object):
 
             data.extend(u_data)
             data.extend(t_data)
+            
+            # find duplicates
+            names = [album['name'] for album in data]
+            duplicate_names = [name for name, count in collections.Counter(names).items() if count > 1]
+            for album in data:
+                if album['name'] in duplicate_names:
+                    album['folder_name'] = '%s - %s' % (album['name'], album['id'])
+                else:
+                    album['folder_name'] = album['name']
 
             # download data
             pool = multiprocessing.Pool(processes=5)

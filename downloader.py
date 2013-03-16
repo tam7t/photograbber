@@ -45,7 +45,7 @@ def save_album(album, path, comments=False):
     #
     #   '\*|"|:|<|>|\?|\\|/|,|'
     REPLACE_RE = re.compile(r'\*|"|:|<|>|\?|\\|/|,')
-    folder = unicode(album['name'])
+    folder = unicode(album['folder_name'])
     folder = REPLACE_RE.sub('_', folder)
     path = os.path.join(path, folder)
     if not os.path.isdir(path):
