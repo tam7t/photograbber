@@ -24,7 +24,6 @@ http://developers.facebook.com/docs/api. You can download the Facebook
 JavaScript SDK at http://github.com/facebook/connect-js/.
 """
 
-import time
 import requests
 import logging
 import repeater
