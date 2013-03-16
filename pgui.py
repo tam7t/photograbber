@@ -44,26 +44,31 @@ class ControlMainWindow(QtGui.QWizard):
         self.token = ''
         self.config = {}
         self.config['sleep_time'] = 0.1
+        self.advancedTarget = ""
 
         # connect signals and validate pages
+        self.ui.aboutPushButton.clicked.connect(self.aboutPressed)
         self.ui.loginPushButton.clicked.connect(self.loginPressed)
+        self.ui.advancedPushButton.clicked.connect(self.advancedPressed)
         self.ui.browseToolButton.clicked.connect(self.openFolder)
         self.ui.wizardPageLogin.registerField("token*", self.ui.enterTokenLineEdit)
         self.ui.wizardPageLogin.validatePage = self.validateLogin
         self.ui.wizardPageTarget.validatePage = self.validateTarget
         self.ui.wizardPageLocation.validatePage = self.beginDownload
 
+    def aboutPressed(self):
+        QtGui.QMessageBox.about(self, "About", "PhotoGrabber v100\n(C) 2013 Ourbunny\nGPLv3\n\nphotograbber.com\nFor full licensing information view the LICENSE.txt file.")
+
     def loginPressed(self):
         facebook.request_token()
- 
-    def openFolder(self):
-        dialog = QtGui.QFileDialog()
-        dialog.setFileMode(QtGui.QFileDialog.Directory)
-        dialog.setOption(QtGui.QFileDialog.ShowDirsOnly)
-        if dialog.exec_():
-            self.config['dir'] = dialog.selectedFiles()[0]
-            self.ui.pathLineEdit.setText(self.config['dir'])
-            
+
+    def advancedPressed(self):
+        self.advancedTarget, ok = QtGui.QInputDialog.getText(self, "Specify Target", "ID/username of target", text=self.advancedTarget)
+        if ok:
+            self.ui.targetTreeWidget.setEnabled(False)
+        else:
+            self.ui.targetTreeWidget.setEnabled(True)
+        
     def validateLogin(self):
         # present progress modal
         progress = QtGui.QProgressDialog("Logging in...", "Abort", 0, 5, parent=self)
@@ -165,6 +170,11 @@ class ControlMainWindow(QtGui.QWizard):
 
         # make sure a real item is selected
         self.config['targets'] = []
+        if not self.ui.targetTreeWidget.isEnabled():
+            self.config['targets'].append(self.advancedTarget)
+            #get info on target?
+            return True
+            
         for i in self.ui.targetTreeWidget.selectedItems():
             if i.data(1,0) is not None: self.config['targets'].append(i.data(1,0)['id'])
 
@@ -172,6 +182,14 @@ class ControlMainWindow(QtGui.QWizard):
             
         QtGui.QMessageBox.warning(self, "PhotoGrabber", "Please select a valid target")
         return False
+
+    def openFolder(self):
+        dialog = QtGui.QFileDialog()
+        dialog.setFileMode(QtGui.QFileDialog.Directory)
+        dialog.setOption(QtGui.QFileDialog.ShowDirsOnly)
+        if dialog.exec_():
+            self.config['dir'] = dialog.selectedFiles()[0]
+            self.ui.pathLineEdit.setText(self.config['dir'])
 
     def beginDownload(self):
         # present progress modal
@@ -181,9 +199,13 @@ class ControlMainWindow(QtGui.QWizard):
         self.progress.show()
         
         # processing heavy function
-        self.helper.process(self.config, self.updateProgress)
+        try:
+            self.helper.process(self.config, self.updateProgress)
+        except Exception as e:
+            QtGui.QMessageBox.critical(self, "Error", '%s - more info in pg.log' % e)
         
         self.progress.setValue(total)
+        QtGui.QMessageBox.information(self, "Done", "Download is complete")
         self.progress.close()
         return True
         
