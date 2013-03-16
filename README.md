@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ## Dependencies
 
 * facebook-sdk (Apache 2.0)
+* [Requests](http://python-requests.org) (Apache 2.0)
 * [PySide](http://qt-project.org/wiki/Category:LanguageBindings::PySide) (LGPL v2.1) 
 * [Qt](http://qt-project.org) (LGPL v2.1) 
 
