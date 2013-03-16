@@ -91,11 +91,13 @@ def main():
     if args.token is None:
         logger.info('No token provided.')
         browser = raw_input("Open Browser [y/n]: ")
+        if not browser.isalnum() raise ValueError('Input must be alphanumeric.')
         if browser == 'y':
             logger.info('Opening default browser.')
             facebook.request_token()
             time.sleep(1)
         args.token = raw_input("Enter Token: ")
+    if not args.token.isalnum() raise ValueError('Input must be alphanumeric.')
 
     logger.info('Provided token: %s' % args.token)
 
@@ -149,6 +151,7 @@ def main():
             args.dir = current_dir
     else:
         args.dir = unicode(args.dir)
+    if not os.path.exists(args.dir) raise ValueError('Download Location must exist.')
 
     logger.info('Download Location: %s' % args.dir)
 
@@ -157,6 +160,7 @@ def main():
         logger.info('Downloading albums.')
         for album in args.album:
             # note, doesnt manually ask for caut options for album
+            if not album.isdigit() raise ValueError('Input must be numeric.')
             print 'Retrieving album data: %s...' % album
             data = helper.get_album(album, comments=args.c)
             print 'Downloading photos'
@@ -167,6 +171,7 @@ def main():
     if args.target is None:
         args.target = []
         args.target.append(raw_input("Target: "))
+    if not args.target.isalnum() raise ValueError('Input must be alphanumeric')
 
     # get options
     if not args.c and not args.a:
@@ -179,6 +184,7 @@ def main():
             print 'c: %s' % helps['c']
             print 'a: %s' % helps['a']
             opt_str = raw_input("Input Options (e.g. 'cau' or 'caut'):")
+            if not opt_str.isalnum() raise ValueError('Input must be alphanumeric')
             if 'u' in opt_str:
                 args.u = True
             if 't' in opt_str:
