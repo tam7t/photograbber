@@ -19,7 +19,7 @@ import logging
 import os
 import json
 import time
-import urllib2
+import requests
 import shutil
 import re
 
@@ -72,17 +72,16 @@ def save_album(album, path, comments=False):
         # if os.path.isfile(filename):
 
         picout = open(pic_path, 'wb')
-        handler = urllib2.Request(photo['src_big'])
         retry = True
 
         while retry:
             try:
                 logger.info('downloading:%s' % photo['src_big'])
-                data = urllib2.urlopen(handler)
+                r = requests.get(photo['src_big'])
                 retry = False
 
                 # save file
-                picout.write(data.read())
+                picout.write(r.content)
                 picout.close()
                 created_time = time.strptime(photo['created_time'], '%Y-%m-%dT%H:%M:%S+0000')
                 photo['created_time_int'] = int(time.mktime(created_time))

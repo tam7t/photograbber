@@ -25,7 +25,7 @@ JavaScript SDK at http://github.com/facebook/connect-js/.
 """
 
 import time
-import urllib
+import requests
 import logging
 import repeater
 import json
@@ -75,7 +75,7 @@ class GraphAPI(object):
             list|dict.  Context dependent
 
         Raises:
-            GraphAPIError
+            GraphAPIError, ConnectionError, HTTPError, Timeout, TooManyRedirects
 
         >>>graph = facebook.GraphAPI(access_token)
         >>>user = graph.get_object('me')
@@ -126,16 +126,17 @@ class GraphAPI(object):
         """Follow a graph API path."""
 
         # no need to build URL since it was given to us
-        self.logger.debug('GET: %s' % path)
 
-        file = urllib.urlopen(path) #IOError
         self.rtt = self.rtt+1
 
         try:
-            response = json.loads(file.read()) #ValueError, IOError
-            self.logger.debug(json.dumps(response, indent=4))
-        finally:
-            file.close()
+            r = requests.get(path)
+        except requests.exceptions.SSLError as e:
+            raise repeater.DoNotRepeatError(e)
+        self.logger.debug('GET: %s' % r.url)
+        
+        response = r.json()
+        self.logger.debug(json.dumps(response, indent=4))
 
         if response.get("error"):
             try:
@@ -161,20 +162,18 @@ class GraphAPI(object):
             args["access_token"] = self.access_token
 
         path = ''.join(["https://graph.facebook.com/",
-                        path,
-                        "?",
-                        urllib.urlencode(args)])
-
-        self.logger.debug('GET: %s' % path)
-        file = urllib.urlopen(path) #IOError
+                        path])
 
         self.rtt = self.rtt+1
 
         try:
-            response = json.loads(file.read()) #ValueError, IOError
-            self.logger.debug(json.dumps(response, indent=4))
-        finally:
-            file.close()
+            r = requests.get(path, params=args)
+        except requests.exceptions.SSLError as e:
+            raise repeater.DoNotRepeatError(e)
+        self.logger.debug('GET: %s' % r.url)
+        
+        response = r.json()
+        self.logger.debug(json.dumps(response, indent=4))
 
         if response.get("error"):
             try:
@@ -197,29 +196,26 @@ class GraphAPI(object):
 
         # see FQL documention link
 
-        query = urllib.quote(query)
-        path = ''.join(['https://api.facebook.com/method/fql.query?',
-                        'format=json&',
-                        'query=%(q)s&',
-                        'access_token=%(at)s'])
-        args = { "q" : query, "at" : self.access_token, }
-        path = path % args
-
-        self.logger.debug('GET: %s' % path)
-        file = urllib.urlopen(path)
+        path = 'https://api.facebook.com/method/fql.query?'
+        args = { "format":"json", "query" : query, "access_token" : self.access_token, }
 
         self.rtt = self.rtt+1
 
         try:
-            response = json.loads(file.read())
-            self.logger.debug(json.dumps(response, indent=4)) #ValueError, IOError
-            if type(response) is dict and "error_code" in response:
-                # add do not repeate error
-                self.logger.error('GET: %s failed' % path)
-                raise GraphAPIError(response["error_code"],
-                                    response["error_msg"])
-        finally:
-            file.close()
+            r = requests.get(path, params=args)
+        except requests.exceptions.SSLError as e:
+            raise repeater.DoNotRepeatError(e)
+        self.logger.debug('GET: %s' % r.url)
+        
+        response = r.json()
+        self.logger.debug(json.dumps(response, indent=4))
+
+        if type(response) is dict and "error_code" in response:
+            # add do not repeate error
+            self.logger.error('GET: %s failed' % path)
+            raise GraphAPIError(response["error_code"],
+                                response["error_msg"])
+
         return response
 
     def get_stats(self):
