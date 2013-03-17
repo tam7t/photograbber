@@ -32,6 +32,86 @@ import downloader
 import logging
 import threading
 
+class LoginSignal(QtCore.QObject):
+    sig = QtCore.Signal(int)
+    err = QtCore.Signal(str)
+    msg = QtCore.Signal(str)
+
+class LoginThread(QtCore.QThread):  
+    def __init__(self, helper, data, parent=None):
+        QtCore.QThread.__init__(self, parent)
+        
+        self.mutex = QtCore.QMutex()
+        self.abort = False #accessed by both threads
+        self.data_ready = False
+        
+        self.helper = helper
+        self.data = data
+        self.status = LoginSignal()
+    
+    def run(self):
+        try:
+            self.mutex.lock()
+            if self.abort:
+                self.mutex.unlock()
+                return
+            self.mutex.unlock()
+            
+            self.data['my_info'] = self.helper.get_me()
+            
+            self.mutex.lock()
+            if self.abort:
+                self.mutex.unlock()
+                return
+            self.status.sig.emit(1)
+            self.mutex.unlock()
+            
+            self.data['friends'] = self.helper.get_friends('me')
+            
+            self.mutex.lock()
+            if self.abort:
+                self.mutex.unlock()
+                return
+            self.status.sig.emit(2)
+            self.mutex.unlock()
+            
+            self.data['likes'] = self.helper.get_likes('me')
+            
+            self.mutex.lock()
+            if self.abort:
+                self.mutex.unlock()
+                return
+            self.status.sig.emit(3)
+            self.mutex.unlock()
+            
+            self.data['subscriptions'] = self.helper.get_subscriptions('me')
+            self.status.sig.emit(4)
+            
+            self.data_ready = True
+        except Exception as e:
+            print "error: %s" % e
+            self.status.err.emit('%s' % e)
+            
+    def stop(self):
+        self.mutex.lock()
+        self.abort = True
+        self.mutex.unlock()
+
+class DownloadThread(QtCore.QThread):  
+    def __init__(self, helper, config, parent=None):
+        QtCore.QThread.__init__(self, parent)
+
+        self.helper = helper
+        self.config = config
+        self.status = LoginSignal()
+
+    def run(self):
+        try:
+            self.helper.process(self.config, self.status.msg.emit)
+        except Exception as e:
+            print "error: %s" % e
+            self.status.err.emit('%s' % e)
+        
 class ControlMainWindow(QtGui.QWizard):
     def __init__(self, parent=None):
         super(ControlMainWindow, self).__init__(parent)
@@ -69,9 +149,12 @@ class ControlMainWindow(QtGui.QWizard):
         else:
             self.ui.targetTreeWidget.setEnabled(True)
         
+    def errorMessage(self, error):
+        QtGui.QMessageBox.critical(self, "Error", '%s - more info in pg.log' % error)
+    
     def validateLogin(self):
         # present progress modal
-        progress = QtGui.QProgressDialog("Logging in...", "Abort", 0, 5, parent=self)
+        progress = QtGui.QProgressDialog("Logging in...", "Abort", 0, 4, parent=self)
         #QtGui.qApp.processEvents() is unnecessary when dialog is Modal
         progress.setWindowModality(QtCore.Qt.WindowModal)
         progress.show()
@@ -81,14 +164,26 @@ class ControlMainWindow(QtGui.QWizard):
         try:
             if not self.token.isalnum(): raise Exception("Please insert a valid token")
             self.helper = helpers.Helper(facebook.GraphAPI(self.token))
-            my_info = self.helper.get_me()
         except Exception as e:
             progress.close()
-            QtGui.QMessageBox.warning(self, "PhotoGrabber", unicode(e))
+            self.errorMessage(e)
             return False
 
-        progress.setValue(1)
-        if progress.wasCanceled(): return False
+        data =  {}
+        thread = LoginThread(self.helper, data)
+        thread.status.sig.connect(progress.setValue)
+        thread.status.err.connect(self.errorMessage)
+        thread.status.err.connect(progress.cancel)
+        thread.start()
+        
+        while thread.isRunning():
+            QtGui.qApp.processEvents()
+            if progress.wasCanceled():
+                thread.stop()
+                thread.wait()
+                return False
+        
+        if progress.wasCanceled() or not thread.data_ready: return False
         
         # clear list
         self.ui.targetTreeWidget.topLevelItem(0).takeChildren()
@@ -96,60 +191,29 @@ class ControlMainWindow(QtGui.QWizard):
         self.ui.targetTreeWidget.topLevelItem(2).takeChildren()
         
         # populate list
-        try:
-            friends = self.helper.get_friends('me')
-        except Exception as e:
-            progress.close()
-            QtGui.QMessageBox.warning(self, "PhotoGrabber", unicode(e))
-            return False
-        
-        progress.setValue(2)
-        if progress.wasCanceled(): return False
-        
-        try:
-            likes = self.helper.get_likes('me')
-        except Exception as e:
-            progress.close()
-            QtGui.QMessageBox.warning(self, "PhotoGrabber", unicode(e))
-            return False
-        
-        progress.setValue(3)
-        if progress.wasCanceled(): return False
-        
-        try:
-            subscriptions = self.helper.get_subscriptions('me')
-        except Exception as e:
-            progress.close()
-            QtGui.QMessageBox.warning(self, "PhotoGrabber", unicode(e))
-            return False
-            
-        progress.setValue(4)
-        if progress.wasCanceled(): return False
-        
         item = QtGui.QTreeWidgetItem()
-        item.setText(0, my_info['name'])
-        item.setData(1, 0, my_info)
+        item.setText(0, data['my_info']['name'])
+        item.setData(1, 0, data['my_info'])
         self.ui.targetTreeWidget.topLevelItem(0).addChild(item)
         
-        for p in friends:
+        for p in data['friends']:
             item = QtGui.QTreeWidgetItem()
             item.setText(0, p['name'])
             item.setData(1, 0, p)
             self.ui.targetTreeWidget.topLevelItem(0).addChild(item)
 
-        for p in likes:
+        for p in data['likes']:
             item = QtGui.QTreeWidgetItem()
             item.setText(0, p['name'])
             item.setData(1, 0, p)
             self.ui.targetTreeWidget.topLevelItem(1).addChild(item)
 
-        for p in subscriptions:
+        for p in data['subscriptions']:
             item = QtGui.QTreeWidgetItem()
             item.setText(0, p['name'])
             item.setData(1, 0, p)
             self.ui.targetTreeWidget.topLevelItem(2).addChild(item)
 
-        progress.setValue(5)
         progress.close()
         return True
     
@@ -199,10 +263,17 @@ class ControlMainWindow(QtGui.QWizard):
         self.progress.show()
         
         # processing heavy function
-        try:
-            self.helper.process(self.config, self.updateProgress)
-        except Exception as e:
-            QtGui.QMessageBox.critical(self, "Error", '%s - more info in pg.log' % e)
+        thread = DownloadThread(self.helper, self.config)
+        thread.status.msg.connect(self.updateProgress)
+        thread.status.err.connect(self.errorMessage)
+        thread.status.err.connect(self.progress.cancel)
+        thread.start()
+        
+        while thread.isRunning():
+            QtGui.qApp.processEvents()
+            if self.progress.wasCanceled():
+                thread.stop()
+                sys.exit()
         
         self.progress.setValue(total)
         QtGui.QMessageBox.information(self, "Done", "Download is complete")
