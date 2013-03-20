@@ -27,15 +27,12 @@ from wizard import Ui_Wizard
 
 import facebook
 import helpers
-import downloader
 
 import logging
-import threading
 
 class LoginSignal(QtCore.QObject):
     sig = QtCore.Signal(int)
     err = QtCore.Signal(str)
-    msg = QtCore.Signal(str)
 
 class LoginThread(QtCore.QThread):  
     def __init__(self, helper, data, parent=None):
@@ -96,21 +93,6 @@ class LoginThread(QtCore.QThread):
         self.mutex.lock()
         self.abort = True
         self.mutex.unlock()
-
-class DownloadThread(QtCore.QThread):  
-    def __init__(self, helper, config, parent=None):
-        QtCore.QThread.__init__(self, parent)
-
-        self.helper = helper
-        self.config = config
-        self.status = LoginSignal()
-
-    def run(self):
-        try:
-            self.helper.process(self.config, self.status.msg.emit)
-        except Exception as e:
-            print "error: %s" % e
-            self.status.err.emit('%s' % e)
         
 class ControlMainWindow(QtGui.QWizard):
     def __init__(self, parent=None):
@@ -258,38 +240,26 @@ class ControlMainWindow(QtGui.QWizard):
     def beginDownload(self):
         # present progress modal
         total = len(self.config['targets'])
-        self.progress = QtGui.QProgressDialog("Downloading...", "Abort", 0, total, parent=self)
-        self.progress.setWindowModality(QtCore.Qt.WindowModal)
-        self.progress.show()
+        progress = QtGui.QProgressDialog("Downloading...", "Abort", 0, 0, parent=self)
+        progress.setWindowModality(QtCore.Qt.WindowModal)
+        progress.show()
         
         # processing heavy function
-        thread = DownloadThread(self.helper, self.config)
-        thread.status.msg.connect(self.updateProgress)
-        thread.status.err.connect(self.errorMessage)
-        thread.status.err.connect(self.progress.cancel)
+        thread = helpers.ProcessThread(self.helper, self.config)
         thread.start()
         
-        while thread.isRunning():
+        while thread.isAlive():
             QtGui.qApp.processEvents()
-            if self.progress.wasCanceled():
-                thread.stop()
+            progress.setLabelText(thread.status())
+            if progress.wasCanceled():
+                #thread.stop()
                 sys.exit()
         
-        self.progress.setValue(total)
+        progress.setValue(total)
+        progress.setLabelText(thread.status())
         QtGui.QMessageBox.information(self, "Done", "Download is complete")
-        self.progress.close()
+        progress.close()
         return True
-        
-    def updateProgress(self, text):
-        QtGui.qApp.processEvents()
-        if self.progress.wasCanceled():
-            # hard quit
-            sys.exit()
-            
-        if text:
-            if text.endswith('downloaded!'):
-                self.progress.setValue(self.progress.value() + 1)
-            self.progress.setLabelText(text)
 
 def start():
     app = QtGui.QApplication(sys.argv)

@@ -195,7 +195,6 @@ def main():
                 args.a = True
 
     # TODO: logger print caut options, logger duplicate print info's
-
     config = {}
     config['dir'] = args.dir
     config['targets'] = args.target
@@ -204,7 +203,10 @@ def main():
     config['c'] = args.c
     config['a'] = args.a
 
-    helper.process(config, print_func)
+    # processing heavy function
+    thread = helpers.ProcessThread(self.helper, self.config)
+    thread.start()
+    thread.join()
 
 if __name__ == "__main__":
     main()

@@ -122,7 +122,7 @@ class Helper(object):
                 album['comments'] = self.graph.get_object('%s/comments' % album['id'])
 
         # get album photos
-        album['photos'] = self.graph.get_object('%s/photos' % album['id'])
+        album['photos'] = self.graph.get_object('%s/photos' % album['id'], limit=50)
 
         if len(album['photos']) == 0:
             self.logger.error('album had zero photos: %s' % album['id'])
@@ -168,14 +168,14 @@ class Helper(object):
         self.logger.info('get_albums: %s' % id)
 
         data = self.graph.get_object('%s/albums' % id)
-
         self.logger.info('albums: %d' % len(data))
 
         for album in data:
             album = self._fill_album(album, comments)
-
+     
         # remove empty albums
         data = [album for album in data if album is not None]
+        data = [album for album in data if len(album['photos']) > 0]
         return data
 
     def get_tagged(self, id, comments=False, full=True):
@@ -189,6 +189,8 @@ class Helper(object):
         self.logger.info('get_tagged: %s' % id)
 
         unsorted = self.graph.get_object('%s/photos' % id)
+        self.logger.info('tagged in %d photos' % len(unsorted))
+        
         unsorted_ids = [x['id'] for x in unsorted]
         album_ids = self.find_album_ids(unsorted_ids)
 
@@ -226,38 +228,152 @@ class Helper(object):
 
         return data
 
-    def process(self, config, update):
+import threading
+import repeater
+import requests
+import Queue
+import os
+import time
+import re
+import shutil
+import json
+
+class DownloaderThread(threading.Thread):
+    def __init__(self, q):
+        """make many of these threads.
+        
+        pulls tuples (photo, album_path) from queue to download"""
+        
+        threading.Thread.__init__(self)
+        self.daemon=True
+        self.q = q
+        self.logger = logging.getLogger('DownloadThread')
+
+    @repeater.repeat
+    def _download(self, web_path):
+        r = requests.get(web_path)
+        return r.content
+    
+    def run(self):
+        while True:
+            photo, path = self.q.get()
+
+            try:
+                save_path = os.path.join(path, photo['path'])
+                web_path = photo['src_big']
+
+                picout = open(save_path, 'wb')
+                self.logger.info('downloading:%s' % web_path)
+                try:
+                    picout.write(self._download(web_path))
+                finally:
+                    picout.close()
+
+                # correct file time
+                created_time = time.strptime(photo['created_time'], '%Y-%m-%dT%H:%M:%S+0000')
+                time_int = int(time.mktime(created_time))
+                os.utime(save_path, (time_int,) * 2)
+            except Exception as e:
+                self.logger.error(e)
+
+            self.q.task_done()
+
+class ProcessThread(threading.Thread):
+    def __init__(self, helper, config):
+        threading.Thread.__init__(self)
+        self.helper = helper
+        self.config = config
+        self.logger = logging.getLogger('ProcessThread')
+        self.q = Queue.Queue()
+        self.msg = "Downloading..."
+        self.pics = 0
+        self.total = 0
+
+    def _processAlbum(self, album, path, comments):
+        # recursively make path
+        # http://serverfault.com/questions/242110/which-common-charecters-are-illegal-in-unix-and-windows-filesystems
+        #
+        # NULL and / are not valid on EXT3
+        # < > : " / \ | ? * are not valid Windows
+        # prohibited characters in order:
+        #   * " : < > ? \ / , NULL
+        #
+        #   '\*|"|:|<|>|\?|\\|/|,|'
+        # add . for ... case
+        REPLACE_RE = re.compile(r'\*|"|:|<|>|\?|\\|/|,|\.')
+        folder = unicode(album['folder_name'])
+        folder = REPLACE_RE.sub('_', folder)
+        path = os.path.join(path, folder)
+        if not os.path.isdir(path):
+            os.makedirs(path) # recursive makedir
+
+        # save files
+        for photo in album['photos']:
+            # set 'src_big' to largest photo size
+            width = -1
+            for image in photo['images']:
+                if image['width'] > width:
+                    photo['src_big'] = image['source']
+                    width = image['width']
+
+            # filename of photo
+            photo['path'] = '%s' % photo['src_big'].split('/')[-1]
+
+            # TODO: add photo to queue
+            self.q.put( (photo,path) )
+
+        # exit funcion if no need to save metadata
+        if not comments:
+            return
+
+        # save JSON file
+        ts = time.strftime("%y-%m-%d_%H-%M-%S")
+
+        filename = os.path.join(path, 'pg_%s.json' % ts)
+        alfilename = os.path.join(path, 'album.json')
+        htmlfilename = os.path.join(path, 'viewer.html')
+        try:
+            db_file = open(filename, "w")
+            db_file.write("var al = ");
+            json.dump(album, db_file)
+            db_file.write(";\n")
+            db_file.close()
+            shutil.copy(filename, alfilename)
+            shutil.copy(os.path.join('dep', 'viewer.html'), htmlfilename)
+        except Exception as e:
+            self.logger.error(e)
+
+    def run(self):
         """Collect all necessary information and download all files"""
+    
+        for i in range(50):
+            t=DownloaderThread(self.q)
+            t.start()
 
-        savedir = config['dir']
-        targets = config['targets']
-        u = config['u']
-        t = config['t']
-        c = config['c']
-        a = config['a']
+        savedir = self.config['dir']
+        targets = self.config['targets']
+        u = self.config['u']
+        t = self.config['t']
+        c = self.config['c']
+        a = self.config['a']
 
-        self.logger.info("%s" % config)
-
-        import downloader
-        import multiprocessing
-        import os
-        import time
+        self.logger.info("%s" % self.config)
 
         for target in targets:
-            target_info = self.get_info(target)
+            target_info = self.helper.get_info(target)
             data = []
             u_data = []
 
             # get user uploaded photos
             if u:
-                update('Retrieving %s\'s album data...' % target_info['name']
-                u_data = self.get_albums(target, comments=c)
+                self.msg = 'Retrieving %s\'s album data...' % target_info['name']
+                u_data = self.helper.get_albums(target, comments=c)
 
             t_data = []
             # get tagged
             if t:
-                update('Retrieving %s\'s tagged photo data...' % target_info['name'])
-                t_data = self.get_tagged(target, comments=c, full=a)
+                self.msg = 'Retrieving %s\'s tagged photo data...' % target_info['name']
+                t_data = self.helper.get_tagged(target, comments=c, full=a)
 
             if u and t:
                 # list of user ids
@@ -268,7 +384,7 @@ class Helper(object):
             data.extend(u_data)
             data.extend(t_data)
             
-            # find duplicates
+            # find duplicate album names
             names = [album['name'] for album in data]
             duplicate_names = [name for name, count in collections.Counter(names).items() if count > 1]
             for album in data:
@@ -277,31 +393,28 @@ class Helper(object):
                 else:
                     album['folder_name'] = album['name']
 
-            # download data
-            pool = multiprocessing.Pool(processes=5)
-
-            pics = 0
+            self.total = 0
             for album in data:
-                pics = pics + len(album['photos'])
+                self.total = self.total + len(album['photos'])
 
-            update('Downloading %d photos...' % pics)
+            self.msg = 'Downloading %d photos...' % self.total
 
             for album in data:
                 path = os.path.join(savedir,unicode(target_info['name']))
-                pool.apply_async(downloader.save_album,
-                                (album,path,c)
-                                ) #callback=
-            pool.close()
+                self._processAlbum(album, path, c)
 
             self.logger.info('Waiting for childeren to finish')
-
-            while multiprocessing.active_children():
-                time.sleep(0.1)
-
-            pool.join()
+            
+            self.q.join()
 
             self.logger.info('Child processes completed')
             self.logger.info('albums: %s' % len(data))
-            self.logger.info('pics: %s' % pics)
+            self.logger.info('pics: %s' % self.total)
 
-            update('%d photos downloaded!' % pics)
+            self.msg = '%d photos downloaded!' % self.total
+    
+    def status(self):
+        return self.msg
+        
+    def progress(self):
+        return (self.total - self.q.qsize(), self.total)
