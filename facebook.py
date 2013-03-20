@@ -96,25 +96,28 @@ class GraphAPI(object):
         # first request
         self.logger.info('retieving: %s' % id)
 
-        response = self._request(id, args) # GraphAPIError
+        try:
+            response = self._request(id, args) # GraphAPIError
+            if response.has_key('data'):
+                # response is a list
+                data.extend(response['data'])
 
-        if response.has_key('data'):
-            # response is a list
-            data.extend(response['data'])
-
-            if response.has_key('paging'):
-                # iterate over pages
-                while response['paging'].has_key('next'):
-                    page_next = response['paging']['next']
-                    response = self._follow(page_next) #GraphAPIError
-                    if len(response['data']) > 0:
-                        data.extend(response['data'])
-                    else:
-                        break
-        else:
-            # response is a dict
-            self.logger.debug('no response key "data"')
-            data = response
+                if response.has_key('paging'):
+                    # iterate over pages
+                    while response['paging'].has_key('next'):
+                        page_next = response['paging']['next']
+                        response = self._follow(page_next) #GraphAPIError
+                        if len(response['data']) > 0:
+                            data.extend(response['data'])
+                        else:
+                            break
+            else:
+                # response is a dict
+                self.logger.debug('no response key "data"')
+                data = response
+        except Exception as e:
+            self.logger.error(e)
+            data = []
 
         self.logger.info('data size: %d' % len(data))
 
@@ -137,6 +140,12 @@ class GraphAPI(object):
         response = r.json()
         self.logger.debug(json.dumps(response, indent=4))
 
+        if type(response) is dict and "error_code" in response:
+            # add do not repeate error
+            self.logger.error('GET: %s failed' % r.url)
+            raise GraphAPIError(response["error_code"],
+                                response["error_msg"])
+
         if response.get("error"):
             try:
                 raise GraphAPIError(response["error"]["code"],
@@ -147,7 +156,7 @@ class GraphAPI(object):
                     raise repeater.DoNotRepeatError(e)
                 else:
                     # raise original GraphAPIError (and try again)
-                    self.logger.error('GET: %s failed' % path)
+                    self.logger.error('GET: %s failed' % r.url)
                     raise
 
         return response
@@ -174,6 +183,12 @@ class GraphAPI(object):
         response = r.json()
         self.logger.debug(json.dumps(response, indent=4))
 
+        if type(response) is dict and "error_code" in response:
+            # add do not repeate error
+            self.logger.error('GET: %s failed' % r.url)
+            raise GraphAPIError(response["error_code"],
+                                response["error_msg"])
+
         if response.get("error"):
             try:
                 raise GraphAPIError(response["error"]["code"],
@@ -184,7 +199,7 @@ class GraphAPI(object):
                     raise repeater.DoNotRepeatError(e)
                 else:
                     # raise original GraphAPIError (and try again)
-                    self.logger.error('GET: %s failed' % path)
+                    self.logger.error('GET: %s failed' % r.url)
                     raise
 
         return response
