@@ -42,9 +42,9 @@ class GraphAPI(object):
     token, this will fetch the profile of the active user and the list
     of the user's friends:
 
-       graph = facebook.GraphAPI(access_token)
-       user = graph.get_object("me")
-       friends = graph.get_connections(user["id"], "friends")
+    >>>graph = facebook.GraphAPI(access_token)
+    >>>user = graph.get_object("me")
+    >>>friends = graph.get_object("me/friends")
 
     You can see a list of all of the objects and connections supported
     by the API at http://developers.facebook.com/docs/reference/api/.
@@ -52,6 +52,23 @@ class GraphAPI(object):
     You can obtain an access token via OAuth or by using the Facebook
     JavaScript SDK. See http://developers.facebook.com/docs/authentication/
     for details.
+    
+    Modifications include:
+    
+    * Switched to Pythonic HTTP `requests` api for server cert validation
+    * Added decorator to retry requests that fail.
+    * Automatic paging over objects.
+    
+    >>>graph.get_object("me/photos")
+    
+    * A helper function to perform fql queries.
+    
+    >>>graph.fql('SELECT uid FROM user WHERE username IS georgehtakei')
+       
+    * Tracks the number of HTTP requests performed by GraphAPI.
+    
+    >>>graph.get_stats()
+
     """
 
     def __init__(self, access_token=None):
@@ -62,19 +79,20 @@ class GraphAPI(object):
     def get_object(self, id, limit=500):
         """Get an entire object from the Graph API.
 
-        Retreives an entine object by following the pages in a response.
+        Retreives an entine object paging responses.
 
         Args:
             id (str): The path of the object to retreive.
 
         Kwards:
-            limit (int): The number of object to request per page (default 500)
+            limit (int): The number of items requested per page (default 500)
 
         Returns:
-            list|dict.  Context dependent
+            list|dict.  Context dependent.
 
         Raises:
-            GraphAPIError, ConnectionError, HTTPError, Timeout, TooManyRedirects
+            GraphAPIError, ConnectionError, HTTPError, Timeout,
+            TooManyRedirects
 
         >>>graph = facebook.GraphAPI(access_token)
         >>>user = graph.get_object('me')
@@ -117,7 +135,7 @@ class GraphAPI(object):
                 data = response
         except Exception as e:
             self.logger.error(e)
-            data = []
+            raise
 
         self.logger.info('data size: %d' % len(data))
 
@@ -141,7 +159,7 @@ class GraphAPI(object):
         self.logger.debug(json.dumps(response, indent=4))
 
         if type(response) is dict and "error_code" in response:
-            # add do not repeate error
+            # add do not repeate error, returned fql-style error...
             self.logger.error('GET: %s failed' % r.url)
             raise GraphAPIError(response["error_code"],
                                 response["error_msg"])
@@ -211,7 +229,8 @@ class GraphAPI(object):
         # see FQL documention link
 
         path = 'https://api.facebook.com/method/fql.query?'
-        args = { "format":"json", "query" : query, "access_token" : self.access_token, }
+        args = { "format":"json", "query" : query,
+                 "access_token" : self.access_token, }
 
         self.rtt = self.rtt+1
 
@@ -242,12 +261,15 @@ class GraphAPI(object):
 
 
 class GraphAPIError(Exception):
+    """Error raised through Facebook API."""
+
     def __init__(self, code, message):
         Exception.__init__(self, message)
         self.code = code
 
 def request_token():
-    """Prompt the user to login to facebook and obtain an OAuth token."""
+    """Prompt the user to login to facebook using their default web browser to
+       obtain an OAuth token."""
 
     import webbrowser
 

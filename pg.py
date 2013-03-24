@@ -18,7 +18,6 @@
 
 import facebook
 import helpers
-import downloader
 
 import argparse
 import time

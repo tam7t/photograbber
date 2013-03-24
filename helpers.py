@@ -17,24 +17,32 @@
 
 import logging
 import collections
+import threading
+import repeater
+import requests
+import Queue
+import os
+import time
+import re
+import shutil
+import json
 
 class Helper(object):
     """Helper functions for retrieving Facebook data.
 
-    Example usage:
-        import facebook
-        import helpers
-
-        graph = facebook.GraphAPI(access_token)
-        helper = helpers.Helper(graph)
-        helper.get_friends(id)
-        helper.get_subscriptions(id)
-        helper.get_likes(id)
-        helper.get_albums(id)
-        helper.get_tagged(id)
-        helper.get_tagged_albums(id)
+    >>>graph = facebook.GraphAPI(access_token)
+    >>>helper = helpers.Helper(graph)
+    >>>helper.get_friends(id)
+    >>>helper.get_subscriptions(id)
+    >>>helper.get_likes(id)
+    >>>helper.get_albums(id)
+    >>>helper.get_tagged(id)
+    >>>helper.get_tagged_albums(id)
 
     The id field in all cases is the id of the target for backup.
+    
+    Args:
+        graph (obj): The path of the object to retreive.
     """
 
     def __init__(self, graph=None):
@@ -47,8 +55,8 @@ class Helper(object):
         The picture_id arguement must be a list of photo object_id's.
 
         Returns a list of album object_id's.  If permissions for the album do
-        not allow for album information to be retrieved then it is omitted from
-        the list.
+        not allow for album information to be retrieved then it is omitted
+        from the list.
         """
 
         q = ''.join(['SELECT object_id, aid FROM album WHERE aid ',
@@ -196,7 +204,8 @@ class Helper(object):
 
         data = []
 
-        self.logger.info('%d photos in %d albums' % (len(unsorted_ids), len(album_ids)))
+        self.logger.info('%d photos in %d albums' % 
+                         (len(unsorted_ids), len(album_ids)))
 
         # TODO: this could be done in parallel
         for album_id in album_ids:
@@ -228,16 +237,7 @@ class Helper(object):
 
         return data
 
-import threading
-import repeater
-import requests
-import Queue
-import os
-import time
-import re
-import shutil
-import json
-
+        
 class DownloaderThread(threading.Thread):
     def __init__(self, q):
         """make many of these threads.
@@ -298,8 +298,8 @@ class ProcessThread(threading.Thread):
         # prohibited characters in order:
         #   * " : < > ? \ / , NULL
         #
-        #   '\*|"|:|<|>|\?|\\|/|,|'
-        # add . for ... case
+        # '\*|"|:|<|>|\?|\\|/|,|'
+        # add . for ... case, windows does not like ellipsis
         REPLACE_RE = re.compile(r'\*|"|:|<|>|\?|\\|/|,|\.')
         folder = unicode(album['folder_name'])
         folder = REPLACE_RE.sub('_', folder)
@@ -319,7 +319,6 @@ class ProcessThread(threading.Thread):
             # filename of photo
             photo['path'] = '%s' % photo['src_big'].split('/')[-1]
 
-            # TODO: add photo to queue
             self.q.put( (photo,path) )
 
         # exit funcion if no need to save metadata
@@ -415,6 +414,3 @@ class ProcessThread(threading.Thread):
     
     def status(self):
         return self.msg
-        
-    def progress(self):
-        return (self.total - self.q.qsize(), self.total)

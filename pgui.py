@@ -86,7 +86,6 @@ class LoginThread(QtCore.QThread):
             
             self.data_ready = True
         except Exception as e:
-            print "error: %s" % e
             self.status.err.emit('%s' % e)
             
     def stop(self):
@@ -132,7 +131,7 @@ class ControlMainWindow(QtGui.QWizard):
             self.ui.targetTreeWidget.setEnabled(True)
         
     def errorMessage(self, error):
-        QtGui.QMessageBox.critical(self, "Error", '%s - more info in pg.log' % error)
+        QtGui.QMessageBox.critical(self, "Error", '%s' % error)
     
     def validateLogin(self):
         # present progress modal

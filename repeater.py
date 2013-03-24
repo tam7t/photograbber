@@ -18,22 +18,22 @@
 import logging
 import time
 
-# raise DoNotRepeatError in a function to force repeat() to exit prematurely
 class DoNotRepeatError(Exception):
+    """Raise DoNotRepeatError in a function to force repeat() to exit."""
+    
     def __init__(self, error):
         Exception.__init__(self, error.message)
         self.error = error
 
-# function repeater decorator
 def repeat(func, n=10, standoff=1.5):
-    """Execute a function repeatedly until success.
+    """Execute a function repeatedly until success (no exceptions raised).
 
     Args:
         func (function): The function to repeat
 
     Kwargs:
-        n (int): The number of times to repeate the function before raising an error
-        standoff (float): Multiplier increment to wait between retrying the function
+        n (int): The number of times to repeate `func` before raising an error
+        standoff (float): Multiplier increment to wait between retrying `func`
 
     >>>import repeater.repeat
 
@@ -75,7 +75,7 @@ def repeat(func, n=10, standoff=1.5):
 
     def wrapped(*args, **kwargs):
         retries = 0
-        logger = logging.getLogger('repeat decorator')
+        logger = logging.getLogger('repeater')
         while True:
             try:
                 return func(*args, **kwargs)
@@ -83,7 +83,7 @@ def repeat(func, n=10, standoff=1.5):
                 # raise the exception that caused funciton failure
                 raise e.error
             except Exception as e:
-                logger.exception('failed function: %s' % e)
+                logger.exception('Function failed: %s' % e)
                 if retries < n:
                     retries += 1
                     time.sleep(retries * standoff)
