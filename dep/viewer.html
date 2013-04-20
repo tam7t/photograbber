@@ -77,7 +77,7 @@
 #tags, #comments, #albumcomments{
 	margin-top:10px;
 }
-#tags a{
+#tags a, #likes a{
 	margin:10px;
 }
 </style>
@@ -107,9 +107,9 @@ set_selection = function(thumb) {
 
     // heading
     var title = document.createElement("h1");
-    if (typeof al['photos'][pid]['caption'] != 'undefined') {
-        // fix: find how to figure out the caption
-        title.innerHTML = "<h1>" + al['photos'][pid]['caption'] + "</h1>";
+    if (typeof al['photos'][pid]['name'] != 'undefined') {
+        // fix: find how to figure out the name
+        title.innerHTML = "<h1>" + al['photos'][pid]['name'] + "</h1>";
     } else {
         title.innerHTML = "<h1>Untitled</h1>";
     }
@@ -125,6 +125,8 @@ set_selection = function(thumb) {
     oimg.id = "thepic";
     // fix: size of the image
     oimg.setAttribute('src', al['photos'][pid]['path']);
+    oimg.setAttribute('width', 'auto');
+    oimg.setAttribute('height', '500px');
     imgp.appendChild(oimg);
     mydiv.appendChild(imgp);
 
@@ -135,9 +137,9 @@ set_selection = function(thumb) {
         tagdiv.innerHTML = "<strong>Tagged:</strong> ";
         mydiv.appendChild(tagdiv);
 
-        for (tag in al['photos'][pid]['tags']['data']) {
+        for (tag in al['photos'][pid]['tags']) {
             var thetag = document.createElement('a');
-            thetag.innerHTML = al['photos'][pid]['tags']['data'][tag]['name'];
+            thetag.innerHTML = al['photos'][pid]['tags'][tag]['name'];
             thetag.href="#";
             var elem = {};
             elem.tag = tag;
@@ -147,16 +149,31 @@ set_selection = function(thumb) {
             tagdiv.appendChild(thetag);
         }
     }
+    
+    // fix: find how tags work
+    if (al['photos'][pid]['likes']) {
+        var likediv = document.createElement("div");
+        likediv.id = "likes";
+        likediv.innerHTML = "<strong>Likes:</strong> ";
+        mydiv.appendChild(likediv);
+
+        for (like in al['photos'][pid]['likes']) {
+            var thetag = document.createElement('a');
+            thetag.innerHTML = al['photos'][pid]['likes'][like]['name'];
+            thetag.href="#";
+            likediv.appendChild(thetag);
+        }
+    }
 
     if (al['photos'][pid]['comments']) {
         var cdiv = document.createElement("div");
         cdiv.id = "comments";
         mydiv.appendChild(cdiv);
-        for (comment in al['photos'][pid]['comments']['data']) {
+        for (comment in al['photos'][pid]['comments']) {
             var thecomment = document.createElement('p');
-            var name = al['photos'][pid]['comments']['data'][comment]['from']['name'];
-            var text = al['photos'][pid]['comments']['data'][comment]['message'];
-            var time = al['photos'][pid]['comments']['data'][comment]['created_time'];
+            var name = al['photos'][pid]['comments'][comment]['from']['name'];
+            var text = al['photos'][pid]['comments'][comment]['message'];
+            var time = al['photos'][pid]['comments'][comment]['created_time'];
             thecomment.innerHTML = "<strong>" + name + ":</strong> " + text + "<br/><i>" + time + "</i>";
             cdiv.appendChild(thecomment);
         }
@@ -170,8 +187,8 @@ function tagit(e, elem) {
     var tb = document.getElementById('box');
     tb.position = 'absolute';
     // fix
-    tb.style.left = '' + (tp.offsetLeft - 70 + (al['photos'][pid]['tags']['data'][tag]['x']/100) * tp.offsetWidth) + 'px';
-    tb.style.top = '' + (tp.offsetTop - 70 + (al['photos'][pid]['tags']['data'][tag]['y']/100) * tp.offsetHeight) + 'px';
+    tb.style.left = '' + (tp.offsetLeft - 70 + (al['photos'][pid]['tags'][tag]['x']/100) * tp.offsetWidth) + 'px';
+    tb.style.top = '' + (tp.offsetTop - 70 + (al['photos'][pid]['tags'][tag]['y']/100) * tp.offsetHeight) + 'px';
     tb.style.display = "block";
 }
 
@@ -233,11 +250,11 @@ function paintAlbum(){
 
     if (al['comments']) {
         var cdiv = document.getElementById('albumcomments');
-        for (comment in al['comments']['data']) {
+        for (comment in al['comments']) {
             var thecomment = document.createElement('p');
-            var name = al['comments']['data'][comment]['from']['name'];
-            var text = al['comments']['data'][comment]['message'];
-            var time = al['comments']['data'][comment]['created_time'];
+            var name = al['comments'][comment]['from']['name'];
+            var text = al['comments'][comment]['message'];
+            var time = al['comments'][comment]['created_time'];
             thecomment.innerHTML = "<strong>" + name + ":</strong> " + text + "<br/><i>" + time + "</i>";
             cdiv.appendChild(thecomment);
         }

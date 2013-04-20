@@ -24,75 +24,15 @@
 import sys
 from PySide import QtCore, QtGui
 from wizard import Ui_Wizard
+from operator import itemgetter
 
 import facebook
 import helpers
 
 import logging
 
-class LoginSignal(QtCore.QObject):
-    sig = QtCore.Signal(int)
-    err = QtCore.Signal(str)
+log = logging.getLogger('pg.%s' % __name__)
 
-class LoginThread(QtCore.QThread):  
-    def __init__(self, helper, data, parent=None):
-        QtCore.QThread.__init__(self, parent)
-        
-        self.mutex = QtCore.QMutex()
-        self.abort = False #accessed by both threads
-        self.data_ready = False
-        
-        self.helper = helper
-        self.data = data
-        self.status = LoginSignal()
-    
-    def run(self):
-        try:
-            self.mutex.lock()
-            if self.abort:
-                self.mutex.unlock()
-                return
-            self.mutex.unlock()
-            
-            self.data['my_info'] = self.helper.get_me()
-            
-            self.mutex.lock()
-            if self.abort:
-                self.mutex.unlock()
-                return
-            self.status.sig.emit(1)
-            self.mutex.unlock()
-            
-            self.data['friends'] = self.helper.get_friends('me')
-            
-            self.mutex.lock()
-            if self.abort:
-                self.mutex.unlock()
-                return
-            self.status.sig.emit(2)
-            self.mutex.unlock()
-            
-            self.data['likes'] = self.helper.get_likes('me')
-            
-            self.mutex.lock()
-            if self.abort:
-                self.mutex.unlock()
-                return
-            self.status.sig.emit(3)
-            self.mutex.unlock()
-            
-            self.data['subscriptions'] = self.helper.get_subscriptions('me')
-            self.status.sig.emit(4)
-            
-            self.data_ready = True
-        except Exception as e:
-            self.status.err.emit('%s' % e)
-            
-    def stop(self):
-        self.mutex.lock()
-        self.abort = True
-        self.mutex.unlock()
-        
 class ControlMainWindow(QtGui.QWizard):
     def __init__(self, parent=None):
         super(ControlMainWindow, self).__init__(parent)
@@ -100,12 +40,15 @@ class ControlMainWindow(QtGui.QWizard):
         self.ui.setupUi(self)
 
         # data
-        self.logger = logging.getLogger('PhotoGrabberGUI')
-        self.helper = None
+        self.graph = facebook.GraphAPI('')
+        self.graph.start()
+        self.peoplegrab = None
+        self.albumgrab = None
+        self.pool = helpers.DownloadPool()
+        for i in range(15): self.pool.add_thread()
         self.token = ''
         self.config = {}
-        self.config['sleep_time'] = 0.1
-        self.advancedTarget = ""
+        self.adv_target = ""
 
         # connect signals and validate pages
         self.ui.aboutPushButton.clicked.connect(self.aboutPressed)
@@ -118,53 +61,79 @@ class ControlMainWindow(QtGui.QWizard):
         self.ui.wizardPageLocation.validatePage = self.beginDownload
 
     def aboutPressed(self):
-        QtGui.QMessageBox.about(self, "About", "PhotoGrabber v100\n(C) 2013 Ourbunny\nGPLv3\n\nphotograbber.com\nFor full licensing information view the LICENSE.txt file.")
+        QtGui.QMessageBox.about(self, "About", "PhotoGrabber v100\n(C) 2013 Ourbunny\nGPLv3\n\nphotograbber.com\nView the LICENSE.txt file for full licensing information.")
 
     def loginPressed(self):
         facebook.request_token()
 
     def advancedPressed(self):
-        self.advancedTarget, ok = QtGui.QInputDialog.getText(self, "Specify Target", "ID/username of target", text=self.advancedTarget)
+        self.adv_target, ok = QtGui.QInputDialog.getText(self, "Specify Target", "ID/username of target", text=self.adv_target)
         if ok:
             self.ui.targetTreeWidget.setEnabled(False)
         else:
             self.ui.targetTreeWidget.setEnabled(True)
         
     def errorMessage(self, error):
+        log.exception(error)
         QtGui.QMessageBox.critical(self, "Error", '%s' % error)
     
     def validateLogin(self):
         # present progress modal
-        progress = QtGui.QProgressDialog("Logging in...", "Abort", 0, 4, parent=self)
+        progress = QtGui.QProgressDialog("Logging in...", "Abort", 0, 0, parent=self)
         #QtGui.qApp.processEvents() is unnecessary when dialog is Modal
         progress.setWindowModality(QtCore.Qt.WindowModal)
         progress.show()
 
-        # attempt to login
         self.token = self.ui.enterTokenLineEdit.text()
+        
+        # allow user to specify debug mode
+        if self.token.endswith(":debug"):
+            logging.getLogger("pg").setLevel(logging.DEBUG)
+            log.info('DEBUG mode enabled.')
+            self.token = self.token.split(":debug")[0]
+        if self.token.endswith(":info"):
+            logging.getLogger("pg").setLevel(logging.INFO)
+            log.info('INFO mode enabled.')
+            self.token = self.token.split(":info")[0]
+
         try:
-            if not self.token.isalnum(): raise Exception("Please insert a valid token")
-            self.helper = helpers.Helper(facebook.GraphAPI(self.token))
+            if not self.token.isalnum(): raise Exception("Please insert a valid token.")
+            self.graph.set_token(self.token)
+            
+            # ensure token is removed from logs...
+            log.info('Provided token: %s' % self.token)
+            
+            self.peoplegrab = helpers.PeopleGrabber(self.graph)
+            self.albumgrab = helpers.AlbumGrabber(self.graph)
         except Exception as e:
             progress.close()
             self.errorMessage(e)
             return False
 
         data =  {}
-        thread = LoginThread(self.helper, data)
-        thread.status.sig.connect(progress.setValue)
-        thread.status.err.connect(self.errorMessage)
-        thread.status.err.connect(progress.cancel)
-        thread.start()
         
-        while thread.isRunning():
+        requests = []
+        requests.append({'path':'me'})
+        requests.append({'path':'me/friends'})
+        requests.append({'path':'me/likes'})
+        requests.append({'path':'me/subscribedto'})
+        
+        rids = self.graph.make_requests(requests)
+        while self.graph.requests_active(rids):
             QtGui.qApp.processEvents()
             if progress.wasCanceled():
-                thread.stop()
-                thread.wait()
+                progress.close()
                 return False
         
-        if progress.wasCanceled() or not thread.data_ready: return False
+        try:
+            data['my_info'] = self.graph.get_data(rids[0])
+            data['friends'] = sorted(self.graph.get_data(rids[1]), key=itemgetter('name'))
+            data['likes'] = sorted(self.graph.get_data(rids[2]), key=itemgetter('name'))
+            data['subscriptions'] = sorted(self.graph.get_data(rids[3]), key=itemgetter('name'))
+        except Exception as e:
+            progress.close()
+            self.errorMessage(e)
+            return False
         
         # clear list
         self.ui.targetTreeWidget.topLevelItem(0).takeChildren()
@@ -216,7 +185,7 @@ class ControlMainWindow(QtGui.QWizard):
         # make sure a real item is selected
         self.config['targets'] = []
         if not self.ui.targetTreeWidget.isEnabled():
-            self.config['targets'].append(self.advancedTarget)
+            self.config['targets'].append(self.adv_target)
             #get info on target?
             return True
             
@@ -244,19 +213,18 @@ class ControlMainWindow(QtGui.QWizard):
         progress.show()
         
         # processing heavy function
-        thread = helpers.ProcessThread(self.helper, self.config)
+        thread = helpers.ProcessThread(self.albumgrab, self.config, self.pool)
         thread.start()
         
         while thread.isAlive():
             QtGui.qApp.processEvents()
             progress.setLabelText(thread.status())
             if progress.wasCanceled():
-                #thread.stop()
                 sys.exit()
         
         progress.setValue(total)
         progress.setLabelText(thread.status())
-        QtGui.QMessageBox.information(self, "Done", "Download is complete")
+        QtGui.QMessageBox.information(self, "Done", "Download is complete.")
         progress.close()
         return True
 
@@ -265,5 +233,3 @@ def start():
     mySW = ControlMainWindow()
     mySW.show()
     sys.exit(app.exec_())
-
-
