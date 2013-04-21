@@ -46,7 +46,7 @@ def print_func(text):
 
 def main():
     # parse arguments
-    parser = argparse.ArgumentParser(description="Download Facebook photos.")
+    parser = argparse.ArgumentParser(description="Download photos from Facebook.")
     parser.add_argument('--cmd', action='store_true', help=helps['cmd'])
     parser.add_argument('--token', help=helps['token'])
     parser.add_argument('--list-targets', choices=('me','friends','likes','following','all'), help=helps['list-targets'])
@@ -104,7 +104,7 @@ def main():
     albumgrab = helpers.AlbumGrabber(graph)
     
     # ensure token is removed from logs...
-    log.info('Provided token: %s' % self.token)
+    log.info('Provided token: %s' % args.token)
 
     # check if token works
     my_info = peoplegrab.get_info('me')
@@ -174,15 +174,12 @@ def main():
         pool = helpers.DownloadPool()
         for a in range(5): pool.add_thread()
         
-        # find duplicate album names
-        names = [album['name'] for album in data]
-        duplicate_names = [name for name, count in collections.Counter(names).items() if count > 1]
+        # set path to include the name of who uploaded the album
+        data = [album for album in data if len(album['photos']) > 0]
         for album in data:
-            if album['name'] in duplicate_names:
-                album['folder_name'] = '%s - %s' % (album['name'], album['id'])
-            else:
-                album['folder_name'] = album['name']
-            pool.save_album(album, args.dir, args.c)
+            album['folder_name'] = album['name']
+            path = os.path.join(args.dir, unicode(album['from']['name']))
+            pool.save_album(album, path)
 
         pool.get_queue().join()
         return
@@ -191,7 +188,9 @@ def main():
     if args.target is None:
         args.target = []
         args.target.append(raw_input("Target: "))
-    if not args.target.isalnum(): raise ValueError('Input must be alphanumeric')
+    
+    for target in args.target:
+        if not target.isalnum(): raise ValueError('Input must be alphanumeric')
 
     # get options
     if not args.c and not args.a:
@@ -229,6 +228,9 @@ def main():
     # process thread
     thread = helpers.ProcessThread(albumgrab, config, pool)
     thread.start()
+    
+    print 'Please wait while I download your photos...'
+
     thread.join()
 
 if __name__ == "__main__":
