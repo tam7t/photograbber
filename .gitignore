@@ -12,7 +12,10 @@ var
 sdist
 develop-eggs
 .installed.cfg
+
+# pg specific
 requests
+*.log
 
 # Installer logs
 pip-log.txt
