@@ -139,6 +139,8 @@ class Ui_Wizard(object):
 
     def retranslateUi(self, Wizard):
         Wizard.setWindowTitle(QtGui.QApplication.translate("Wizard", "PhotoGrabber", None, QtGui.QApplication.UnicodeUTF8))
+        import res
+        Wizard.setWindowIcon(QtGui.QIcon(res.getpath('dep/pg.png')))
         self.wizardPageLogin.setTitle(QtGui.QApplication.translate("Wizard", "Login to Facebook", None, QtGui.QApplication.UnicodeUTF8))
         self.loginPushButton.setText(QtGui.QApplication.translate("Wizard", "Login", None, QtGui.QApplication.UnicodeUTF8))
         self.enterTokenLabel.setText(QtGui.QApplication.translate("Wizard", "Enter Token", None, QtGui.QApplication.UnicodeUTF8))
