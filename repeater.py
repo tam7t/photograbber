@@ -18,22 +18,33 @@
 import logging
 import time
 
-# raise DoNotRepeatError in a function to force repeat() to exit prematurely
+log = logging.getLogger('pg.%s' % __name__)
+
 class DoNotRepeatError(Exception):
+    """Raise DoNotRepeatError in a function to force repeat() to exit."""
+    
     def __init__(self, error):
         Exception.__init__(self, error.message)
         self.error = error
 
-# function repeater decorator
-def repeat(func, n=10, standoff=1.5):
-    """Execute a function repeatedly until success.
+class PauseRepeatError(Exception):
+    """Raise PauseRepeatError in a function to delay repeating for a set number
+    of seconds."""
+    
+    def __init__(self, error, delay):
+        Exception.__init__(self, error.message)
+        self.error = error
+        self.delay = delay
+
+def repeat(func, n=5, standoff=1.5):
+    """Execute a function repeatedly until success (no exceptions raised).
 
     Args:
         func (function): The function to repeat
 
     Kwargs:
-        n (int): The number of times to repeate the function before raising an error
-        standoff (float): Multiplier increment to wait between retrying the function
+        n (int): The number of times to repeate `func` before raising an error
+        standoff (float): Multiplier increment to wait between retrying `func`
 
     >>>import repeater.repeat
 
@@ -44,7 +55,7 @@ def repeat(func, n=10, standoff=1.5):
     >>>    print 'B'
 
     >>>@repeater.repeat
-    >>>    def pass():
+    >>>def pass():
     >>>    print 'B'
 
     >>>@repeater.repeat
@@ -75,15 +86,18 @@ def repeat(func, n=10, standoff=1.5):
 
     def wrapped(*args, **kwargs):
         retries = 0
-        logger = logging.getLogger('repeat decorator')
         while True:
             try:
                 return func(*args, **kwargs)
             except DoNotRepeatError as e:
                 # raise the exception that caused funciton failure
                 raise e.error
+            except PauseRepeatError as e:
+                log.exception(e)
+                time.sleep(e.delay)
+                retries += 1
             except Exception as e:
-                logger.exception('failed function: %s' % e)
+                log.exception(e)
                 if retries < n:
                     retries += 1
                     time.sleep(retries * standoff)

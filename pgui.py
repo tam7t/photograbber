@@ -24,13 +24,14 @@
 import sys
 from PySide import QtCore, QtGui
 from wizard import Ui_Wizard
+from operator import itemgetter
 
 import facebook
 import helpers
-import downloader
 
 import logging
-import threading
+
+log = logging.getLogger('pg.%s' % __name__)
 
 class ControlMainWindow(QtGui.QWizard):
     def __init__(self, parent=None):
@@ -39,12 +40,15 @@ class ControlMainWindow(QtGui.QWizard):
         self.ui.setupUi(self)
 
         # data
-        self.logger = logging.getLogger('PhotoGrabberGUI')
-        self.helper = None
+        self.graph = facebook.GraphAPI('')
+        self.graph.start()
+        self.peoplegrab = None
+        self.albumgrab = None
+        self.pool = helpers.DownloadPool()
+        for i in range(15): self.pool.add_thread()
         self.token = ''
         self.config = {}
-        self.config['sleep_time'] = 0.1
-        self.advancedTarget = ""
+        self.adv_target = ""
 
         # connect signals and validate pages
         self.ui.aboutPushButton.clicked.connect(self.aboutPressed)
@@ -57,38 +61,79 @@ class ControlMainWindow(QtGui.QWizard):
         self.ui.wizardPageLocation.validatePage = self.beginDownload
 
     def aboutPressed(self):
-        QtGui.QMessageBox.about(self, "About", "PhotoGrabber v100\n(C) 2013 Ourbunny\nGPLv3\n\nphotograbber.com\nFor full licensing information view the LICENSE.txt file.")
+        QtGui.QMessageBox.about(self, "About", "PhotoGrabber v100\n(C) 2013 Ourbunny\nGPLv3\n\nphotograbber.com\nView the LICENSE.txt file for full licensing information.")
 
     def loginPressed(self):
         facebook.request_token()
 
     def advancedPressed(self):
-        self.advancedTarget, ok = QtGui.QInputDialog.getText(self, "Specify Target", "ID/username of target", text=self.advancedTarget)
+        self.adv_target, ok = QtGui.QInputDialog.getText(self, "Specify Target", "ID/username of target", text=self.adv_target)
         if ok:
             self.ui.targetTreeWidget.setEnabled(False)
         else:
             self.ui.targetTreeWidget.setEnabled(True)
         
+    def errorMessage(self, error):
+        log.exception(error)
+        QtGui.QMessageBox.critical(self, "Error", '%s' % error)
+    
     def validateLogin(self):
         # present progress modal
-        progress = QtGui.QProgressDialog("Logging in...", "Abort", 0, 5, parent=self)
+        progress = QtGui.QProgressDialog("Logging in...", "Abort", 0, 0, parent=self)
         #QtGui.qApp.processEvents() is unnecessary when dialog is Modal
         progress.setWindowModality(QtCore.Qt.WindowModal)
         progress.show()
 
-        # attempt to login
         self.token = self.ui.enterTokenLineEdit.text()
+        
+        # allow user to specify debug mode
+        if self.token.endswith(":debug"):
+            logging.getLogger("pg").setLevel(logging.DEBUG)
+            log.info('DEBUG mode enabled.')
+            self.token = self.token.split(":debug")[0]
+        if self.token.endswith(":info"):
+            logging.getLogger("pg").setLevel(logging.INFO)
+            log.info('INFO mode enabled.')
+            self.token = self.token.split(":info")[0]
+
         try:
-            if not self.token.isalnum(): raise Exception("Please insert a valid token")
-            self.helper = helpers.Helper(facebook.GraphAPI(self.token))
-            my_info = self.helper.get_me()
+            if not self.token.isalnum(): raise Exception("Please insert a valid token.")
+            self.graph.set_token(self.token)
+            
+            # ensure token is removed from logs...
+            log.info('Provided token: %s' % self.token)
+            
+            self.peoplegrab = helpers.PeopleGrabber(self.graph)
+            self.albumgrab = helpers.AlbumGrabber(self.graph)
         except Exception as e:
             progress.close()
-            QtGui.QMessageBox.warning(self, "PhotoGrabber", unicode(e))
+            self.errorMessage(e)
             return False
 
-        progress.setValue(1)
-        if progress.wasCanceled(): return False
+        data =  {}
+        
+        requests = []
+        requests.append({'path':'me'})
+        requests.append({'path':'me/friends'})
+        requests.append({'path':'me/likes'})
+        requests.append({'path':'me/subscribedto'})
+        
+        rids = self.graph.make_requests(requests)
+        while self.graph.requests_active(rids):
+            QtGui.qApp.processEvents()
+            if progress.wasCanceled():
+                progress.close()
+                return False
+        
+        try:
+            data['my_info'] = self.graph.get_data(rids[0])
+            data['friends'] = sorted(self.graph.get_data(rids[1]), key=itemgetter('name'))
+            data['likes'] = sorted(self.graph.get_data(rids[2]), key=itemgetter('name'))
+            data['subscriptions'] = sorted(self.graph.get_data(rids[3]), key=itemgetter('name'))
+        except Exception as e:
+            progress.close()
+            self.errorMessage(e)
+            return False
         
         # clear list
         self.ui.targetTreeWidget.topLevelItem(0).takeChildren()
@@ -96,60 +141,29 @@ class ControlMainWindow(QtGui.QWizard):
         self.ui.targetTreeWidget.topLevelItem(2).takeChildren()
         
         # populate list
-        try:
-            friends = self.helper.get_friends('me')
-        except Exception as e:
-            progress.close()
-            QtGui.QMessageBox.warning(self, "PhotoGrabber", unicode(e))
-            return False
-        
-        progress.setValue(2)
-        if progress.wasCanceled(): return False
-        
-        try:
-            likes = self.helper.get_likes('me')
-        except Exception as e:
-            progress.close()
-            QtGui.QMessageBox.warning(self, "PhotoGrabber", unicode(e))
-            return False
-        
-        progress.setValue(3)
-        if progress.wasCanceled(): return False
-        
-        try:
-            subscriptions = self.helper.get_subscriptions('me')
-        except Exception as e:
-            progress.close()
-            QtGui.QMessageBox.warning(self, "PhotoGrabber", unicode(e))
-            return False
-            
-        progress.setValue(4)
-        if progress.wasCanceled(): return False
-        
         item = QtGui.QTreeWidgetItem()
-        item.setText(0, my_info['name'])
-        item.setData(1, 0, my_info)
+        item.setText(0, data['my_info']['name'])
+        item.setData(1, 0, data['my_info'])
         self.ui.targetTreeWidget.topLevelItem(0).addChild(item)
         
-        for p in friends:
+        for p in data['friends']:
             item = QtGui.QTreeWidgetItem()
             item.setText(0, p['name'])
             item.setData(1, 0, p)
             self.ui.targetTreeWidget.topLevelItem(0).addChild(item)
 
-        for p in likes:
+        for p in data['likes']:
             item = QtGui.QTreeWidgetItem()
             item.setText(0, p['name'])
             item.setData(1, 0, p)
             self.ui.targetTreeWidget.topLevelItem(1).addChild(item)
 
-        for p in subscriptions:
+        for p in data['subscriptions']:
             item = QtGui.QTreeWidgetItem()
             item.setText(0, p['name'])
             item.setData(1, 0, p)
             self.ui.targetTreeWidget.topLevelItem(2).addChild(item)
 
-        progress.setValue(5)
         progress.close()
         return True
     
@@ -171,7 +185,7 @@ class ControlMainWindow(QtGui.QWizard):
         # make sure a real item is selected
         self.config['targets'] = []
         if not self.ui.targetTreeWidget.isEnabled():
-            self.config['targets'].append(self.advancedTarget)
+            self.config['targets'].append(self.adv_target)
             #get info on target?
             return True
             
@@ -194,36 +208,28 @@ class ControlMainWindow(QtGui.QWizard):
     def beginDownload(self):
         # present progress modal
         total = len(self.config['targets'])
-        self.progress = QtGui.QProgressDialog("Downloading...", "Abort", 0, total, parent=self)
-        self.progress.setWindowModality(QtCore.Qt.WindowModal)
-        self.progress.show()
+        progress = QtGui.QProgressDialog("Downloading...", "Abort", 0, 0, parent=self)
+        progress.setWindowModality(QtCore.Qt.WindowModal)
+        progress.show()
         
         # processing heavy function
-        try:
-            self.helper.process(self.config, self.updateProgress)
-        except Exception as e:
-            QtGui.QMessageBox.critical(self, "Error", '%s - more info in pg.log' % e)
+        thread = helpers.ProcessThread(self.albumgrab, self.config, self.pool)
+        thread.start()
         
-        self.progress.setValue(total)
-        QtGui.QMessageBox.information(self, "Done", "Download is complete")
-        self.progress.close()
+        while thread.isAlive():
+            QtGui.qApp.processEvents()
+            progress.setLabelText(thread.status())
+            if progress.wasCanceled():
+                sys.exit()
+        
+        progress.setValue(total)
+        progress.setLabelText(thread.status())
+        QtGui.QMessageBox.information(self, "Done", "Download is complete.")
+        progress.close()
         return True
-        
-    def updateProgress(self, text):
-        QtGui.qApp.processEvents()
-        if self.progress.wasCanceled():
-            # hard quit
-            sys.exit()
-            
-        if text:
-            if text.endswith('downloaded!'):
-                self.progress.setValue(self.progress.value() + 1)
-            self.progress.setLabelText(text)
 
 def start():
     app = QtGui.QApplication(sys.argv)
     mySW = ControlMainWindow()
     mySW.show()
     sys.exit(app.exec_())
-
-
