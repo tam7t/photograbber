@@ -61,7 +61,7 @@ class ControlMainWindow(QtGui.QWizard):
         self.ui.wizardPageLocation.validatePage = self.beginDownload
 
     def aboutPressed(self):
-        QtGui.QMessageBox.about(self, "About", "PhotoGrabber v100\n(C) 2013 Ourbunny\nGPLv3\n\nphotograbber.com\nView the LICENSE.txt file for full licensing information.")
+        QtGui.QMessageBox.about(self, "About", "PhotoGrabber v2.100\n(C) 2013 Ourbunny\nGPLv3\n\nphotograbber.org\nView the LICENSE.txt file for full licensing information.")
 
     def loginPressed(self):
         facebook.request_token()

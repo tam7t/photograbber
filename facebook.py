@@ -314,7 +314,7 @@ def request_token():
     import webbrowser
 
     CLIENT_ID = "139730900025"
-    RETURN_URL = "http://faceauth.appspot.com/"
+    RETURN_URL = "http://faceauth.appspot.com/?version=2100"
     SCOPE = ''.join(['user_photos,',
                      'friends_photos,',
                      'user_likes,',
