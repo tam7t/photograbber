@@ -24,6 +24,12 @@ import time
 import logging
 import os
 
+import res
+
+# error when packaging
+# https://github.com/kennethreitz/requests/issues/557
+os.environ['REQUESTS_CA_BUNDLE'] = res.getpath('requests/cacert.pem')
+
 # help strings
 helps = {}
 helps['u'] = 'Download all albums uploaded by the target. (Use with --target)'
@@ -76,7 +82,7 @@ def main():
         logging.getLogger("pg").setLevel(logging.DEBUG)
 
     log.info('Arguments parsed, log configured.')
-
+    
     # GUI
     if not args.cmd:
         log.info('Starting GUI.')
