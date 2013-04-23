@@ -25,7 +25,8 @@ import os
 import time
 import re
 import shutil
-import json  
+import json
+import res
 
 log = logging.getLogger('pg.%s' % __name__)
 
@@ -554,7 +555,8 @@ class DownloadPool(object):
             db_file.write(";\n")
             db_file.close()
             shutil.copy(filename, alfilename)
-            shutil.copy(os.path.join('dep', 'viewer.html'), htmlfilename)
+            template_path = res.getpath('dep/viewer.html')
+            shutil.copy(template_path, htmlfilename)
         except Exception as e:
             log.error(e)
 
