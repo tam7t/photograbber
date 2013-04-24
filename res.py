@@ -22,11 +22,15 @@
 
 import os
 import sys
+import logging
+log = logging.getLogger(__name__)
 
 def getpath(name):
-    if getattr(sys, 'frozen', None):
+    if getattr(sys, '_MEIPASS', None):
         basedir = sys._MEIPASS
     else:
-        basedir = os.path.dirname(__file__)
-    
+        #basedir = os.path.dirname(__file__)
+        basedir = os.getcwd()
+
+    log.error('basedir: %s' % basedir)
     return os.path.join(basedir, name)
