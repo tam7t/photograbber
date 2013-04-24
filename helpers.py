@@ -612,7 +612,8 @@ class ProcessThread(threading.Thread):
             # find duplicate album names
             for album in data:
                 if 'name' not in album or 'from' not in album:
-                    log.error('Name not in album: %s' % album)
+                    log.debug('Name not in album: %s' % album)
+                    log.error('name or from not in album')
 
             # idea, folder name = album (if from target) otherwise
             # also, have 'process data, &args' options for get_target_albums, etc so we can download
