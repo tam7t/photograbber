@@ -218,13 +218,14 @@ class ControlMainWindow(QtGui.QWizard):
         
         while thread.isAlive():
             QtGui.qApp.processEvents()
-            progress.setLabelText(thread.status())
+            #progress.setLabelText(thread.status())
             if progress.wasCanceled():
                 sys.exit()
         
-        progress.setValue(total)
-        progress.setLabelText(thread.status())
-        QtGui.QMessageBox.information(self, "Done", "Download is complete.")
+        #progress.setValue(total)
+        #progress.setLabelText(thread.status())
+        #QtGui.QMessageBox.information(self, "Done", "Download is complete.")
+        QtGui.QMessageBox.information(self, "Done", thread.status())
         progress.close()
         return True
 

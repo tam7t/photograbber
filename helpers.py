@@ -628,7 +628,7 @@ class ProcessThread(threading.Thread):
                 else:
                     album['folder_name'] = album['name']
 
-            self.total = 0
+            #self.total = 0
             for album in data:
                 self.total = self.total + len(album['photos'])
 
@@ -646,7 +646,7 @@ class ProcessThread(threading.Thread):
             log.info('Albums: %s' % len(data))
             log.info('Pics: %s' % self.total)
 
-            self.msg = '%d photos downloaded!' % self.total
+        self.msg = '%d photos downloaded!' % self.total
     
     def status(self):
         return self.msg
