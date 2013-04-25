@@ -83,6 +83,8 @@ def main():
 
     log.info('Arguments parsed, log configured.')
     
+    log.error('basedir: %s' % res.getpath() )
+    
     # GUI
     if not args.cmd:
         log.info('Starting GUI.')
