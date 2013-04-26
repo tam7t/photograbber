@@ -1,241 +1,324 @@
-#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
-# Copyright 2010 Facebook
+# Copyright (C) 2013 Ourbunny
 #
-# Licensed under the Apache License, Version 2.0 (the "License"); you may
-# not use this file except in compliance with the License. You may obtain
-# a copy of the License at
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
-#
-# Modified for photograbber by Tommy Murphy, ourbunny.com
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Python client library for the Facebook Platform.
-
-This client library is designed to support the Graph API and the official
-Facebook JavaScript SDK, which is the canonical way to implement
-Facebook authentication. Read more about the Graph API at
-http://developers.facebook.com/docs/api. You can download the Facebook
-JavaScript SDK at http://github.com/facebook/connect-js/.
-"""
-
-import cgi
-import hashlib
-import time
-import urllib
+import json
 import logging
-from repeater import repeat
+import Queue
+import repeater
+import requests
+import threading
 
-# Find a JSON parser
-try:
-    import json
-    _parse_json = lambda s: json.loads(s)
-except ImportError:
-    try:
-        import simplejson
-        _parse_json = lambda s: simplejson.loads(s)
-    except ImportError:
-        # For Google AppEngine
-        from django.utils import simplejson
-        _parse_json = lambda s: simplejson.loads(s)
+log = logging.getLogger('pg.%s' % __name__)
 
-class GraphAPI(object):
-    """A client for the Facebook Graph API.
-
-    See http://developers.facebook.com/docs/api for complete documentation
-    for the API.
-
-    The Graph API is made up of the objects in Facebook (e.g., people, pages,
-    events, photos) and the connections between them (e.g., friends,
-    photo tags, and event RSVPs). This client provides access to those
-    primitive types in a generic way. For example, given an OAuth access
-    token, this will fetch the profile of the active user and the list
-    of the user's friends:
-
-       graph = facebook.GraphAPI(access_token)
-       user = graph.get_object("me")
-       friends = graph.get_connections(user["id"], "friends")
-
-    You can see a list of all of the objects and connections supported
-    by the API at http://developers.facebook.com/docs/reference/api/.
-
-    You can obtain an access token via OAuth or by using the Facebook
-    JavaScript SDK. See http://developers.facebook.com/docs/authentication/
-    for details.
-    """
-
+class GraphBuilder(object):
     def __init__(self, access_token=None):
         self.access_token = access_token
-        self.logger = logging.getLogger('facebook')
-        self.rtt = 0 # round trip total
 
-    def get_object(self, id, limit=500):
-        """Get an entine object from the Graph API by paging over the requested
-        object until the entire object is retrieved.
+    def set_token(self, access_token):
+        self.access_token = access_token
 
-            graph = facebook.GraphAPI(access_token)
-            user = graph.get_object('me')
-            print user['id']
-            photos = graph.get_object('me/photos')
-            for photo in photos:
-                print photo['id']
-
-        id: path to the object to retrieve
-        limit: number of objects to retrieve in each page [max = 5000]
-
-        Returns [list|dictionary] or False on OAuthException.
-        """
-
-        data = []
-        has_more = True
+    def get_object(self, path, limit=100):
+        # API defines max limit as 5K
+        if limit > 5000: limit = 5000
 
         args = {}
-        args["limit"] = limit
-
-        # first request
-        self.logger.info('retieving: %s' % id)
-        response = self._request(id, args)
-
-        if response == False:
-            # OAuthException
-            return False
-
-        if response.has_key('data'):
-            # response is a list
-            data.extend(response['data'])
-
-            if response.has_key('paging'):
-                # iterate over pages
-                while response['paging'].has_key('next'):
-                    page_next = response['paging']['next']
-                    response = self._follow(page_next)
-                    if len(response['data']) > 0:
-                        data.extend(response['data'])
-                    else:
-                        break
-        else:
-            # response is a dict
-            self.logger.debug('no response key "data"')
-            data = response
-
-        self.logger.info('data size: %d' % len(data))
-
-        return data
-
-    @repeat
-    def _follow(self, path):
-        """Follow a graph API path."""
-
-        self.logger.debug('GET: %s' % path)
-        file = urllib.urlopen(path)
-
-        self.rtt = self.rtt+1
-
-        try:
-            response = _parse_json(file.read())
-            self.logger.debug(json.dumps(response, indent=4))
-        finally:
-            file.close()
-        if response.get("error"):
-            raise GraphAPIError(response["error"]["code"],
-                                response["error"]["message"])
-        return response
-
-    @repeat
-    def _request(self, path, args=None):
-        """Fetches the given path in the Graph API."""
-
-        if not args: args = {}
-        if self.access_token:
-            args["access_token"] = self.access_token
+        #if limit > 0:
+        #   args["limit"] = limit
+        args["access_token"] = self.access_token
 
         path = ''.join(["https://graph.facebook.com/",
-                        path,
-                        "?",
-                        urllib.urlencode(args)])
+                        path])
 
-        self.logger.debug('GET: %s' % path)
-        file = urllib.urlopen(path)
+        return path, args
 
-        self.rtt = self.rtt+1
-
-        try:
-            response = _parse_json(file.read())
-            self.logger.debug(json.dumps(response, indent=4))
-        finally:
-            file.close()
-        if response.get("error"):
-            code = response["error"]["code"]
-            if code == 190 or code == 2500:
-                # abort on OAuthException
-                self.logger.error(response["error"]["message"])
-                return False
-            raise GraphAPIError(response["error"]["code"],
-                                response["error"]["message"])
-        return response
-
-    @repeat
     def fql(self, query):
-        """Execute an FQL query."""
-
         # see FQL documention link
 
-        query = urllib.quote(query)
-        path = ''.join(['https://api.facebook.com/method/fql.query?',
-                        'format=json&',
-                        'query=%(q)s&',
-                        'access_token=%(at)s'])
-        args = { "q" : query, "at" : self.access_token, }
-        path = path % args
+        path = 'https://api.facebook.com/method/fql.query?'
+        args = { "format":"json", "query" : query,
+                 "access_token" : self.access_token, }
+                 
+        return path, args
 
-        self.logger.debug('GET: %s' % path)
-        file = urllib.urlopen(path)
+    def parse(self, response, url):
+        if type(response) is dict and "error_code" in response:
+            log.error('GET: %s failed' % url)
+            raise GraphAPIError(response["error_code"],
+                                response["error_msg"],
+                                url)
 
-        self.rtt = self.rtt+1
+        if type(response) is dict and "error" in response:
+            log.error('GET: %s failed' % url)
+            raise GraphAPIError(response["error"]["code"],
+                                response["error"]["message"],
+                                url)
 
-        try:
-            response = _parse_json(file.read())
-            self.logger.debug(json.dumps(response, indent=4))
-            if type(response) is dict and "error_code" in response:
-                raise GraphAPIError(response["error_code"],
-                                    response["error_msg"])
-        except Exception, e:
-            raise e
-        finally:
-            file.close()
         return response
 
-    def get_stats(self):
-        """Returns the number of HTTP requests performed by GraphAPI."""
-        return self.rtt
-
-    def reset_stats(self):
-        """Reset the number of HTTP requests performed by GraphAPI."""
-        self.rtt = 0
 
 class GraphAPIError(Exception):
-    def __init__(self, code, message):
+    """Error raised through Facebook API."""
+
+    def __init__(self, code, message, url):
         Exception.__init__(self, message)
         self.code = code
+        self.url = url
 
-### photograbber specific ###
 
-import webbrowser
+class GraphRequestHandler(threading.Thread):
+    def __init__(self, request_queue, response_queue, graph_builder):
+        threading.Thread.__init__(self)
+        self.daemon = True
+        
+        self.request_queue = request_queue
+        self.response_queue = response_queue
+        self.graph_builder = graph_builder
 
-CLIENT_ID = "139730900025"
-RETURN_URL = "http://faceauth.appspot.com/"
-SCOPE = ''.join(['user_photos,',
-                 'friends_photos,',
-                 'user_likes'])
+    @repeater.repeat
+    def _get(self, request):
+        if 'path' in request:
+            path, args = self.graph_builder.get_object(request['path'])
+        elif 'query' in request:
+            path, args = self.graph_builder.fql(request['query'])
+        elif 'url' in request:
+            path, args = request['url'], []
+        else:
+            raise repeater.DoNotRepeatError(TypeError('Malformed request'))
 
+        try:
+            r = requests.get(path, params=args)
+        except requests.exceptions.SSLError as e:
+            raise repeater.DoNotRepeatError(e)
+
+        log.debug('GET: %s' % r.url)
+        response = r.json()
+        #log.debug(json.dumps(response, indent=4))
+
+        try:
+            retVal = self.graph_builder.parse(response, r.url)
+        except GraphAPIError as e:
+            # https://developers.facebook.com/docs/reference/api/errors/
+            # do not try on OAuth errors
+            if e.code is 190:
+                raise repeater.DoNotRepeatError(e)
+            # API Too Many Calls (server side throttling)
+            # API User Too Many Calls
+            if e.code is 4 or e.code is 17:
+                raise repeater.PauseRepeatError(e, 60)
+            raise e
+        return retVal
+
+    def run(self):
+        while True:
+            request = self.request_queue.get()
+
+            #process request
+            more = True
+            while more:
+                try:
+                    response = self._get(request)
+                except Exception as e:
+                    request['error'] = e # notify of error!
+                    request['more'] = False
+                    self.response_queue.put(request)
+                    break
+
+                if 'data' in response:
+                    request['response'] = response['data']
+                else:
+                    request['response'] = response
+
+                # is there an option to page over responses
+                more = False
+                if 'paging' in response:
+                    if len(response['data']) > 0:
+                        if 'next' in response['paging']:
+                            next_request = request.copy()
+                            next_request.pop('response', None)
+                            next_request.pop('path', None)
+                            next_request.pop('query', None)
+                            next_request['url'] = response['paging']['next']
+                            more = True
+
+                request['more'] = more
+                self.response_queue.put(request)
+                if more:
+                    request = next_request
+
+            self.request_queue.task_done()
+
+
+class GraphAPI(threading.Thread):
+    def __init__(self, access_token):
+        threading.Thread.__init__(self)
+        self.daemon = True
+
+        self.graph_builder = GraphBuilder()
+        self.set_token(access_token)
+
+        self.id = 0
+        self.active = []
+        self.activeLock = threading.Lock()
+
+        self.data = {}
+        self.errors ={}
+        self.dataLock = threading.Lock()
+
+        self.request_queue = Queue.Queue()
+        self.response_queue = Queue.Queue()
+        self.threads = []
+
+    def run(self):
+        # create my worker threads
+        for n in range(10):
+            t = GraphRequestHandler(self.request_queue, self.response_queue,
+                                    self.graph_builder)
+            self.threads.append(t)
+            t.start()
+
+        # process responses
+        while True:
+            response = self.response_queue.get()
+
+            # save response in data dictionary
+            self.dataLock.acquire()
+            if 'response' in response:
+                data = response['response']
+                if response['id'] in self.data:
+                    try:
+                        self.data[response['id']].extend(data)
+                    except Exception as e:
+                        import pdb; pdb.set_trace()
+                else:
+                    self.data[response['id']] = data
+            elif 'error' in response:
+                self.errors[response['id']] = response['error']
+            self.dataLock.release()
+
+            # processing on 'id' is complete
+            if not response['more']:
+                self.activeLock.acquire()
+                self.active.remove(response['id'])
+                self.activeLock.release()
+
+            self.response_queue.task_done()
+
+    def set_token(self, access_token):
+        # clear all logs of any tokens, for security
+        if access_token is not None:
+            format = logging.root.handlers[0].formatter._fmt
+            formatter = FacebookFormatter(format, access_token)
+            logging.root.handlers[0].setFormatter(formatter)
+    
+        self.graph_builder.set_token(access_token)
+
+    def make_request(self, request):
+        """ request should only have one of path, query, url
+                request = {
+                            'id': <id>,
+                            'path': <path>,
+                            'query': <query>,
+                            'url': <url>,
+                            --- after served ---
+                            'response': <response dict|list>,
+                            'more': <True|False>, internal use, says whether response is last one or if there are 'more'
+                            'error': <response error object>,
+                          }
+        """
+        self.activeLock.acquire()
+        self.id += 1
+        request['id'] = self.id
+        self.active.append(request['id'])
+        self.activeLock.release()
+        self.request_queue.put(request)
+        return request['id']
+
+    def make_requests(self, requests):
+        self.activeLock.acquire()
+        rids = []
+        for request in requests:
+            self.id += 1
+            request['id'] = self.id
+            self.active.append(request['id'])
+            self.request_queue.put(request)
+            rids.append(request['id'])
+        self.activeLock.release()
+        return rids
+
+    def request_active(self, id):
+        # answers the question: is the request done?
+        self.activeLock.acquire()
+        retVal = id in self.active
+        self.activeLock.release()
+        return retVal
+    
+    def requests_active(self, ids):
+        self.activeLock.acquire()
+        retVal = False
+        if len(list(set(ids) & set(self.active))) > 0:
+            retVal = True
+        self.activeLock.release()
+        return retVal
+        
+    def has_data(self, id):
+        self.dataLock.acquire()
+        # data can mean data or an error
+        retVal = id in self.data or id in self.errors
+        self.dataLock.release()
+        return retVal
+
+    def get_data(self, id):
+        # returns available data, does not block
+        # will return all data before raising an error
+        retVal = retErr = None
+
+        self.dataLock.acquire()
+        if id in self.data:
+            retVal = self.data.pop(id, None)
+        elif id in self.errors:
+            retErr = self.errors.pop(id, None)
+        self.dataLock.release()
+        
+        if retErr is not None:
+            raise retErr
+        else:
+            return retVal
+
+class FacebookFormatter(logging.Formatter):
+    def __init__(self, format, token):
+        logging.Formatter.__init__(self, format)
+        self.token = token
+
+    def format(self, record):
+        msg = logging.Formatter.format(self, record)
+        return msg.replace(self.token, "<TOKEN>")
+            
 def request_token():
-    """Prompt the user to login to facebook and obtain an OAuth token."""
+    """Prompt the user to login to facebook using their default web browser to
+       obtain an OAuth token."""
+
+    import webbrowser
+
+    CLIENT_ID = "139730900025"
+    RETURN_URL = "https://faceauth.appspot.com/?version=2100"
+    SCOPE = ''.join(['user_photos,',
+                     'friends_photos,',
+                     'user_likes,',
+                     'user_subscriptions',])
 
     url = ''.join(['https://graph.facebook.com/oauth/authorize?',
                    'client_id=%(cid)s&',
@@ -244,6 +327,7 @@ def request_token():
                    'type=user_agent'])
 
     args = { "cid" : CLIENT_ID, "rurl" : RETURN_URL, "scope" : SCOPE, }
+    
+    log.info(url % args)
 
     webbrowser.open(url % args)
-

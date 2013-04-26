@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2012  Ourbunny
+# Copyright (C) 2013 Ourbunny
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,39 +18,44 @@
 
 import facebook
 import helpers
-import downloader
 
 import argparse
 import time
 import logging
 import os
-import multiprocessing
+
+import res
+
+# error when packaging
+# https://github.com/kennethreitz/requests/issues/557
+os.environ['REQUESTS_CA_BUNDLE'] = res.getpath('requests/cacert.pem')
 
 # help strings
 helps = {}
-helps['u'] = 'Download all albums uploaded by the targets. (Use with --target)'
-helps['t'] = 'Download all photos with the target tagged. (Use with --target)'
+helps['u'] = 'Download all albums uploaded by the target. (Use with --target)'
+helps['t'] = 'Download all photos where the target is tagged. (Use with --target)'
 helps['c'] = 'Download full comment data. (Use with --target)'
-helps['a'] = 'Download full album, even if just 1 photo has the tagged target. (Use with --target)'
-helps['gui'] =  'Use wx based GUI'
+helps['a'] = 'Download the full album, even if tagged in a single photo. (Use with --target and -t)'
+helps['cmd'] =  'Use command line instead of Qt GUI'
 helps['token'] = 'Specify the OAuth token used to authenticate with Facebook.'
 helps['list-targets'] ='Display names and object_id\'s of potential targets'
 helps['list-albums'] = 'List the albums uploaded by a target.  Separate the object_id\'s of targets with spaces.'
-helps['target'] = 'Download targets. Separate the object_id\'s of people or pages with spaces.'
+helps['target'] = 'Download targets. Separate the object_id\'s of people or likes with spaces.'
 helps['album'] = 'Download full albums.  Separate the object_id\'s of the albums with spaces.'
 helps['dir'] = 'Specify the directory to store the downloaded information. (Use with --target or --album)'
 helps['debug'] = 'Log extra debug information to pg.log'
 
+log = logging.getLogger('pg')
+
 def print_func(text):
-    print text
+    if text: print text
 
 def main():
-
-    # parse arguements
-    parser = argparse.ArgumentParser(description="Download Facebook photos.")
-    parser.add_argument('--gui', action='store_true', help=helps['gui'])
+    # parse arguments
+    parser = argparse.ArgumentParser(description="Download photos from Facebook.")
+    parser.add_argument('--cmd', action='store_true', help=helps['cmd'])
     parser.add_argument('--token', help=helps['token'])
-    parser.add_argument('--list-targets', choices=('me','friends','pages','following','all'), help=helps['list-targets'])
+    parser.add_argument('--list-targets', choices=('me','friends','likes','following','all'), help=helps['list-targets'])
     parser.add_argument('--list-albums', nargs='+', help=helps['list-albums'])
     parser.add_argument('--target', nargs='+', help=helps['target'])
     parser.add_argument('-u', action='store_true', help=helps['u'])
@@ -62,83 +67,87 @@ def main():
     parser.add_argument('--debug', choices=('info','debug'), help=helps['debug'])
 
     args = parser.parse_args()
-
+    
     # setup logging
+    format = "%(asctime)s:%(levelname)s:%(name)s:%(lineno)d:%(message)s"
+
+    logging.basicConfig(filename='pg.log',
+                        filemode='w',
+                        format=format,
+                        level=logging.ERROR)
+
     if args.debug == 'info':
-        logging.basicConfig(filename='pg.log',
-                            filemode='w',
-                            level=logging.INFO)
+        logging.getLogger("pg").setLevel(logging.INFO)
     elif args.debug == 'debug':
-        logging.basicConfig(filename='pg.log',
-                            filemode='w',
-                            level=logging.DEBUG)
-    else:
-        logging.basicConfig(filename='pg.log',
-                            filemode='w',
-                            level=logging.ERROR)
+        logging.getLogger("pg").setLevel(logging.DEBUG)
 
-    logger = logging.getLogger('photograbber')
-
-    logger.info('Arguments parsed, logger configured.')
-
+    log.info('Arguments parsed, log configured.')
+    
+    log.error('basedir: %s' % res.getpath() )
+    
     # GUI
-    if args.gui:
-        logger.info('Starting GUI.')
+    if not args.cmd:
+        log.info('Starting GUI.')
         import pgui
         pgui.start()
-        logger.info('GUI completed, exiting.')
+        log.info('GUI completed, exiting.')
         exit()
 
     # Login
     if args.token is None:
-        logger.info('No token provided.')
+        log.info('No token provided.')
         browser = raw_input("Open Browser [y/n]: ")
+        if not browser.isalnum(): raise ValueError('Input must be alphanumeric.')
         if browser == 'y':
-            logger.info('Opening default browser.')
+            log.info('Opening default browser.')
             facebook.request_token()
             time.sleep(1)
         args.token = raw_input("Enter Token: ")
+    if not args.token.isalnum(): raise ValueError('Input must be alphanumeric.')
 
-    logger.info('Provided token: %s' % args.token)
-
-    # TODO: check if token works, if not then quit
+    # setup facebook API objects
     graph = facebook.GraphAPI(args.token)
-    helper = helpers.Helper(graph)
+    graph.start()
+    peoplegrab = helpers.PeopleGrabber(graph)
+    albumgrab = helpers.AlbumGrabber(graph)
+    
+    # ensure token is removed from logs...
+    log.info('Provided token: %s' % args.token)
 
     # check if token works
-    my_info = helper.get_me()
-    if my_info == False:
-        logger.error('Provided Token Failed: %s' % args.token)
+    my_info = peoplegrab.get_info('me')
+    if not my_info:
+        log.error('Provided Token Failed: %s' % args.token)
         print 'Provided Token Failed: OAuthException'
         exit()
 
-    # --list-targets {'me','friends','pages','following','all'}
+    # --list-targets {'me','friends','likes','following','all'}
     target_list = []
     if args.list_targets == 'me':
         target_list.append(my_info)
     elif args.list_targets == 'friends':
-        target_list.extend(helper.get_friends('me'))
-    elif args.list_targets == 'pages':
-        target_list.extend(helper.get_pages('me'))
+        target_list.extend(peoplegrab.get_friends('me'))
+    elif args.list_targets == 'likes':
+        target_list.extend(peoplegrab.get_likes('me'))
     elif args.list_targets == 'following':
-        target_list.extend(helper.get_subscriptions('me'))
+        target_list.extend(peoplegrab.get_subscriptions('me'))
     elif args.list_targets == 'all':
         target_list.append(my_info)
-        target_list.extend(helper.get_friends('me'))
-        target_list.extend(helper.get_pages('me'))
-        target_list.extend(helper.get_subscriptions('me'))
+        target_list.extend(peoplegrab.get_friends('me'))
+        target_list.extend(peoplegrab.get_likes('me'))
+        target_list.extend(peoplegrab.get_subscriptions('me'))
 
     if args.list_targets is not None:
-        logger.info('Listing available targets.')
+        log.info('Listing available targets.')
         for target in target_list:
             print ('%(id)s:"%(name)s"' % target).encode('utf-8')
         return
 
     # --list_albums <object_id 1> ... <object_id n>
     if args.list_albums is not None:
-        logger.info('Listing available albums.')
+        log.info('Listing available albums.')
         for target in args.list_albums:
-            album_list = helper.get_album_list(target)
+            album_list = albumgrab.list_albums(target)
             for album in album_list:
                 print ('%(id)s:"%(name)s"' % album).encode('utf-8')
         return
@@ -151,28 +160,49 @@ def main():
             args.dir = current_dir
     else:
         args.dir = unicode(args.dir)
+    if not os.path.exists(args.dir): raise ValueError('Download Location must exist.')
 
-    logger.info('Download Location: %s' % args.dir)
+    log.info('Download Location: %s' % args.dir)
 
     # --album <object_id 1> ... <object_id n>
     if args.album is not None:
-        logger.info('Downloading albums.')
+        log.info('Downloading albums.')
+        albums = []
         for album in args.album:
             # note, doesnt manually ask for caut options for album
+            if not album.isdigit(): raise ValueError('Input must be numeric.')
             print 'Retrieving album data: %s...' % album
-            data = helper.get_album(album, comments=args.c)
-            print 'Downloading photos'
-            downloader.save_album(data, args.dir)
+            albums.append({'id':album})
+
+        data = albumgrab.get_albums_by_id(albums, comments=args.c)
+        
+        # todo: filter photos_ids from albums before downloading...
+        
+        print 'Downloading photos'
+        pool = helpers.DownloadPool()
+        for a in range(5): pool.add_thread()
+        
+        # set path to include the name of who uploaded the album
+        data = [album for album in data if len(album['photos']) > 0]
+        for album in data:
+            album['folder_name'] = album['name']
+            path = os.path.join(args.dir, unicode(album['from']['name']))
+            pool.save_album(album, path)
+
+        pool.get_queue().join()
         return
 
     # --target <object_id 1> ... <object_id n>
     if args.target is None:
         args.target = []
         args.target.append(raw_input("Target: "))
+    
+    for target in args.target:
+        if not target.isalnum(): raise ValueError('Input must be alphanumeric')
 
     # get options
-    if args.c is False and args.a is False:
-        if args.u is False and args.t is False:
+    if not args.c and not args.a:
+        if not args.u and not args.t:
             print ''
             print 'Options'
             print '-------'
@@ -181,6 +211,7 @@ def main():
             print 'c: %s' % helps['c']
             print 'a: %s' % helps['a']
             opt_str = raw_input("Input Options (e.g. 'cau' or 'caut'):")
+            if not opt_str.isalnum(): raise ValueError('Input must be alphanumeric')
             if 'u' in opt_str:
                 args.u = True
             if 't' in opt_str:
@@ -190,8 +221,6 @@ def main():
             if 'a' in opt_str:
                 args.a = True
 
-    # TODO: logger print caut options, logger duplicate print info's
-
     config = {}
     config['dir'] = args.dir
     config['targets'] = args.target
@@ -200,7 +229,17 @@ def main():
     config['c'] = args.c
     config['a'] = args.a
 
-    helper.process(config, print_func)
+    # download pool
+    pool = helpers.DownloadPool()
+    for a in range(5): pool.add_thread()
+
+    # process thread
+    thread = helpers.ProcessThread(albumgrab, config, pool)
+    thread.start()
+    
+    print 'Please wait while I download your photos...'
+
+    thread.join()
 
 if __name__ == "__main__":
     main()

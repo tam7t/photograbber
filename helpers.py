@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
-# Copyright (C) 2012 Ourbunny
+# Copyright (C) 2013 Ourbunny
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,166 +16,339 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
+import collections
+import threading
+import repeater
+import requests
+import Queue
+import os
+import time
+import re
+import shutil
+import json
+import res
 
-class Helper(object):
-    """Helper functions for retrieving Facebook data.
+log = logging.getLogger('pg.%s' % __name__)
 
-    Example usage:
-        import facebook
-        import helpers
-
-        graph = facebook.GraphAPI(access_token)
-        helper = helpers.Helper(graph)
-        helper.get_friends(id)
-        helper.get_subscriptions(id)
-        helper.get_pages(id)
-        helper.get_albums(id)
-        helper.get_tagged(id)
-        helper.get_tagged_albums(id)
-
-    The id field in all cases is the id of the target for backup.
-    """
-
-    def __init__(self, graph=None):
+class PeopleGrabber(object):
+    def __init__(self, graph):
         self.graph = graph
-        self.logger = logging.getLogger('helper')
-
-    def find_album_ids(self, picture_ids):
-        """Find the albums that contains pictures.
-
-        The picture_id arguement must be a list of photo object_id's.
-
-        Returns a list of album object_id's.  If permissions for the album do
-        not allow for album information to be retrieved then it is omitted from
-        the list.
-        """
-
-        q = ''.join(['SELECT object_id, aid FROM album WHERE aid ',
-                     'IN (SELECT aid FROM photo WHERE object_id IN (%s))'])
-
-        ids = []
-
-        # split query into 25 pictures at a time
-        for i in range(len(picture_ids) / 25 + 1):
-            pids = ','.join(picture_ids[i * 25:(i+1) * 25])
-            new_ids = self.graph.fql(q % pids)
-            try:
-                new_ids = [x['object_id'] for x in new_ids]
-            except Exception,e:
-                self.logger.error('no album access')
-                self.logger.error('%s' % e)
-                bad_query = q % pids
-                self.logger.error('query: %s' % bad_query)
-                new_ids = []
-
-            ids = list(set(ids+new_ids))
-
-        return ids
-
-    # The following methods return a list of object id <> friend
-    # [ {'id':<id>, 'name':<name>}, ... ]
-
-    def get_me(self):
-        return self.graph.get_object('me')
 
     def get_info(self, id):
-        return self.graph.get_object('%s' % id)
-
+        request = {'path':'%s' % id}
+        rid = self.graph.make_request(request)
+        while self.graph.request_active(rid):
+            time.sleep(1)
+        return self.graph.get_data(rid)
+    
     def get_friends(self, id):
-        data = self.graph.get_object('%s/friends' % id, 5000)
-        return sorted(data, key=lambda k:k['name'].lower())
+        request = {'path':'%s/friends' % id}
+        rid = self.graph.make_request(request)
+        while self.graph.request_active(rid):
+            time.sleep(1)
+        a = self.graph.get_data(rid)
+        return a
 
     def get_subscriptions(self, id):
-        data = self.graph.get_object('%s/subscribedto' % id, 5000)
-        return sorted(data, key=lambda k:k['name'].lower())
-
-    def get_pages(self, id):
-        data = self.graph.get_object('%s/likes' % id, 5000)
-        return sorted(data, key=lambda k:k['name'].lower())
-
-    # return the list of album information that id has uploaded
-
-    def get_album_list(self, id):
-        return self.graph.get_object('%s/albums' % id)
-
-    # The following methods return a list of albums & photos
-    # returns [{album_1}, ..., {album_n} ]
-    # where album_n = {'id':<id>, 'comments':[<>], 'photos':[<>], ... }
-
-    # note: there is a potential for optimization of comments
-    #   only download comments if
-    #       1) we want comments
-    #       2) if comments already exists
-    #       3) follow comment paging, instead of re-getting all
+        request = {'path':'%s/subscribedto' % id}
+        rid = self.graph.make_request(request)
+        while self.graph.request_active(rid):
+            time.sleep(1)
+        return self.graph.get_data(rid)
+        
+    def get_likes(self, id):
+        request = {'path':'%s/likes' % id}
+        rid = self.graph.make_request(request)
+        while self.graph.request_active(rid):
+            time.sleep(1)
+        return self.graph.get_data(rid)
 
 
-    def _fill_album(self, album, comments):
-        """Takes an already loaded album and fills out the photos and
-        comments"""
+class AlbumGrabber(object):
+    def __init__(self, graph):
+        self.graph = graph
 
-        # get comments
-        if comments and 'comments' in album:
-            if len(album['comments']) >= 25:
-                album['comments'] = self.graph.get_object('%s/comments' % album['id'])
+    def get_info(self, id):
+        request = {'path':'%s' % id}
+        rid = self.graph.make_request(request)
+        while self.graph.request_active(rid):
+            time.sleep(1)
+        return self.graph.get_data(rid)
 
-        # get album photos
-        album['photos'] = self.graph.get_object('%s/photos' % album['id'])
+    def list_albums(self, id):
+        request = {'path':'%s/albums' % id}
+        rid = self.graph.make_request(request)
+        while self.graph.request_active(rid):
+            time.sleep(1)
+        return self.graph.get_data(rid)
+        
+    def _get_node_comments(self, node, comments):
+        if not comments:
+            # correct tags
+            try:
+                node['tags'] = node['tags']['data']
+            except Exception as e:
+                pass
+                
+            # correct likes
+            try:
+                node['likes'] = node['likes']['data']
+            except Exception as e:
+                pass
 
-        if len(album['photos']) == 0:
-            self.logger.error('album had zero photos: %s' % album['id'])
-            return None
+            # correct comments
+            try:
+                node['comments'] = node['comments']['data']
+            except Exception as e:
+                pass
+            return
+        
+        # get node tags
+        try:
+            url = node['tags']['paging']['next']
+            r = {'url':url}
+            node['tags_rid'] = self.graph.make_request(r)
+        except Exception as e:
+            pass
+            
+        # get node likes
+        try:
+            url = node['likes']['paging']['next']
+            r = {'url':url}
+            node['likes_rid'] = self.graph.make_request(r)
+        except Exception as e:
+            pass
+
+        # get node comments
+        try:
+            url = node['comments']['paging']['next']
+            r = {'url':url}
+            node['comments_rid'] = self.graph.make_request(r)
+        except Exception as e:
+            pass
+
+        # correct tags
+        try:
+            node['tags'] = node['tags']['data']
+        except Exception as e:
+            pass
+            
+        # correct likes
+        try:
+            node['likes'] = node['likes']['data']
+        except Exception as e:
+            pass
+
+        # correct comments
+        try:
+            node['comments'] = node['comments']['data']
+        except Exception as e:
+            pass
+    
+    def _fulfill_album_requests(self, album):
+        """Does not fulfil 'photos_rid' since that may require additional
+        requests."""
+        
+        wait = 0
+        # fulfill all remaining data requests
+        if 'likes_rid' in album:
+            rid = album['likes_rid']
+            if self.graph.request_active(rid):
+                wait += 1
+            else:
+                try:
+                    album['likes'].extend(self.graph.get_data(rid))
+                except Exception as e:
+                    log.exception(e)
+                finally:
+                    album.pop('likes_rid', None)
+
+        if 'comments_rid' in album:
+            rid = album['comments_rid']
+            if self.graph.request_active(rid):
+                wait += 1
+            else:
+                try:
+                    album['comments'].extend(self.graph.get_data(rid))
+                except Exception as e:
+                    log.exception(e)
+                finally:
+                    album.pop('comments_rid', None)
 
         for photo in album['photos']:
-            # get picture comments
-            if comments and 'comments' in photo:
-                n_before = len(photo['comments']['data'])
-                # using examples from: georgehtakei/photos
-                # the default number of comments to inculde in a photo from
-                # /photos or /<album>/photos is 25
-                # this applies to likes also
-                if n_before >= 25:
-                    photo['comments'] = self.graph.get_object('%s/comments' % photo['id'])
-                    n_after = len(photo['comments'])
-                    if n_before != n_after:
-                        self.logger.info('found more comments:' + str(n_before) + ' to ' + str(n_after))
-        return album
+            if 'tags_rid' in photo:
+                rid = photo['tags_rid']
+                if self.graph.request_active(rid):
+                    wait += 1
+                else:
+                    try:
+                        photo['tags'].extend(self.graph.get_data(rid))
+                    except Exception as e:
+                        log.exception(e)
+                    finally:
+                        photo.pop('tags_rid', None)
+                    
+            if 'likes_rid' in photo:
+                rid = photo['likes_rid']
+                if self.graph.request_active(rid):
+                    wait += 1
+                else:
+                    try:
+                        photo['likes'].extend(self.graph.get_data(rid))
+                    except Exception as e:
+                        log.exception(e)
+                    finally:
+                        photo.pop('likes_rid', None)
 
-    def get_album(self, id, comments=False):
-        """Get a single album"""
+            if 'comments_rid' in photo:
+                rid = photo['comments_rid']
+                if self.graph.request_active(rid):
+                    wait += 1
+                else:
+                    try:
+                        photo['comments'].extend(self.graph.get_data(rid))
+                    except Exception as e:
+                        log.exception(e)
+                    finally:
+                        photo.pop('comments_rid', None)
 
-        self.logger.info('begin get_album: %s' % id)
+        return wait
+    
+    def _finish_albums(self, albums, comments, focus=None):
+        # append photos to album & request photo info
+        oldwait = 0
+        while True:
+            photos_done = True
+            wait = 0
+            for album in albums:
+                # skip if photos already done
+                if 'photos_rid' not in album:
+                    continue
+                
+                # check if request is done
+                rid = album['photos_rid']
+                if self.graph.request_active(rid):
+                    photos_done = False
+                    wait += 1
+                else:
+                    try:
+                        album['photos'] = self.graph.get_data(rid)
+                    except Exception as e:
+                        log.error('Photos request unsuccessful for album: %s' % album['id'])
+                        log.exception(e)
+                        album['photos'] = []
+                    finally:
+                        album.pop('photos_rid', None)
+                    
+                    if focus is not None:
+                        # remove photos that we don't care about
+                        album['photos'] = [photo for photo in album['photos'] if photo['id'] in focus]
 
-        # handle special case:
-        # create empty album if there are not permissions to view album info
-        # but can see photo from tagged
-        if id == '0':
-            album= {}
-            album['id'] = '0'
-            album['name'] = 'Unknown'
-            album['comments'] = []
-            album['photos'] = []
-            return album
+                    for photo in album['photos']:
+                        self._get_node_comments(photo, comments)
 
-        album = self.graph.get_object('%s' % id)
-        if type(album) is not dict:
-            import pdb;pdb.set_trace()
-        return self._fill_album(album, comments)
+            if photos_done: break
+            if wait != oldwait:
+                log.info('Waiting on %d photos requests.' % wait)
+            oldwait = wait
+            time.sleep(1)
+            
+        log.info('All photos found.  Waiting on remaining data requests.')
 
-    def get_albums(self, id, comments=False):
-        """Get all albums uploaded by id"""
+        # fulfill all remaining data requests
+        oldwait = 0
+        while True:
+            wait = 0
+            for album in albums:
+                wait += self._fulfill_album_requests(album)
 
-        self.logger.info('get_albums: %s' % id)
+            if wait is 0: break
+            if wait != oldwait:
+                log.info('Waiting on %d requests.' % wait)
+            oldwait = wait
+            time.sleep(1)
 
-        data = self.graph.get_object('%s/albums' % id)
+        return albums
 
-        self.logger.info('albums: %d' % len(data))
+    def get_target_albums(self, id, comments=True):
+        albums = []
+        
+        # request list of albums
+        request = {'path':'%s/albums' % id}
+        rid = self.graph.make_request(request)
+        
+        # iterate over albums, requesting photos & comments
+        while True:
+            # request photos from albums
+            temp = self.graph.get_data(rid)          # raises exception
+            if temp is None:
+                temp = []
 
-        for album in data:
-            album = self._fill_album(album, comments)
+            for album in temp:
+                aid = album['id']
+                albums.append(album)
+                
+                # get album photos
+                r = {'path':'%s/photos' % aid}
+                album['photos_rid'] = self.graph.make_request(r)
+                
+                # queue album metadata
+                self._get_node_comments(album, comments)
+            
+            # break loop when no more request data
+            active = self.graph.request_active(rid)
+            more_data = self.graph.has_data(rid)
+            if not active and not more_data: break
+            time.sleep(1)
+            
+        return self._finish_albums(albums, comments)
+   
+    def get_albums_by_id(self, albums, comments=True, focus=None):
+        # albums = [ {'id':<id>, 'photos':[<photo>, <photo>]} , ... ]
+        
+        # put in a request for each album
+        for album in albums:
+            request = {'path':'%s' % album['id']}
+            rid = self.graph.make_request(request)
+            album['album_rid'] = rid
+            
+            request = {'path':'%s/photos' % album['id']}
+            rid = self.graph.make_request(request)
+            album['photos_rid'] = rid
 
-        # remove empty albums
-        data = [album for album in data if album is not None]
-        return data
+        # fulfill album requests
+        oldwait = 0
+        while True:
+            wait = 0
+            for album in albums:
+                if 'album_rid' in album:
+                    rid = album['album_rid']
+                    if self.graph.request_active(rid):
+                        wait += 1
+                    else:
+                        try:
+                            temp = self.graph.get_data(rid)
+                        except Exception as e:
+                            log.exception(e)
+                            temp = album
+                            temp.pop('album_rid', None)
+
+                        try:
+                            album.update(temp)
+                            album.pop('album_rid', None)
+                        except Exception as e:
+                            log.exception(e)
+                            import pdb; pdb.set_trace()
+                        self._get_node_comments(album, comments)
+
+            if wait is 0: break
+            if wait != oldwait:
+                log.info('Waiting on %d album requests.' % wait)
+            oldwait = wait
+            time.sleep(1)
+
+        # get node comments on album
+        return self._finish_albums(albums, comments, focus)
 
     def get_tagged(self, id, comments=False, full=True):
         """Get all photos where argument id is tagged.
@@ -185,78 +358,247 @@ class Helper(object):
         full: get all photos from all album the user is tagged in
         """
 
-        self.logger.info('get_tagged: %s' % id)
+        log.info('get_tagged: %s' % id)
+        
+        # request list of albums
+        request = {'path':'%s/photos' % id}
+        rid = self.graph.make_request(request)
+        
+        while self.graph.request_active(rid):
+            time.sleep(1)
 
-        unsorted = self.graph.get_object('%s/photos' % id)
+        unsorted = self.graph.get_data(rid)     # raises exception
+
+        log.info('tagged in %d photos' % len(unsorted))
+        
         unsorted_ids = [x['id'] for x in unsorted]
         album_ids = self.find_album_ids(unsorted_ids)
 
         data = []
 
-        self.logger.info('%d photos in %d albums' % (len(unsorted_ids), len(album_ids)))
+        log.info('%d photos in %d albums' % 
+                         (len(unsorted_ids), len(album_ids)))
 
-        # TODO: this could be done in parallel
         for album_id in album_ids:
-            album = self.get_album(album_id, comments)
-            photo_ids = [x['id'] for x in album['photos']]
-            if not full:
-                # limit album to only those in unsorted, even though we now
-                # have information on them all... graph API sucks
-                photos = [x for x in unsorted if x['id'] in photo_ids]
-                album['photos'] = photos
-            # remove id's from unsorted that are in the album
-            unsorted = [x for x in unsorted if x['id'] not in photo_ids]
+            album = {}
+            album['id'] = album_id
             data.append(album)
+        
+        if full:
+            data = self.get_albums_by_id(data, comments)
+        else:
+            data = self.get_albums_by_id(data, comments, focus=unsorted_ids)
 
+        # clear out album photos
+        for album in data:
+            photo_ids = [pic['id'] for pic in album['photos']]
+            # remove id's from unsorted that are in the album
+            unsorted = [pic for pic in unsorted if pic['id'] not in photo_ids]
+        
         # anything not claimed under album_ids will fall into fake album
         if len(unsorted) > 0:
-            empty_album = self.get_album('0', comments)
+            empty_album = {}
+            empty_album['id'] = '0'
+            empty_album['name'] = 'Unknown'
             empty_album['photos'] = unsorted
 
             for photo in empty_album['photos']:
-                # get picture comments
-                if comments and 'comments' in photo:
-                    photo['comments'] = self.graph.get_object('%s/comments' % photo['id'])
+                self._get_node_comments(photo, comments)
+
+            wait = 0
+            while True:
+                wait = self._fulfill_album_requests(empty_album)
+                if wait is 0: break
+                time.sleep(1)
 
             data.append(empty_album)
 
-        # remove empty albums
-        data = [album for album in data if album is not None]
-
         return data
 
-    def process(self, config, update):
+    def find_album_ids(self, picture_ids):
+        """Find the albums that contains pictures.
+
+        The picture_id arguement must be a list of photo object_id's.
+
+        Returns a list of album object_id's.  If permissions for the album do
+        not allow for album information to be retrieved then it is omitted
+        from the list.
+        """
+
+        q = ''.join(['SELECT object_id, aid FROM album WHERE aid ',
+                     'IN (SELECT aid FROM photo WHERE object_id IN (%s))'])
+
+        ids = []
+        rids = []
+        
+        # split query into 25 pictures at a time
+        for i in range(len(picture_ids) / 25 + 1):
+            pids = ','.join(picture_ids[i * 25:(i+1) * 25])
+            request = {'query':q % pids}
+            rid = self.graph.make_request(request)
+            rids.append(rid)
+
+        while True:
+            wait = 0
+            for rid in rids:
+                if self.graph.request_active(rid):
+                    wait += 1
+                else:
+                    try:
+                        new_ids = self.graph.get_data(rid)
+                        new_ids = [x['object_id'] for x in new_ids]
+                    except Exception as e:
+                        bad_query = q % pids
+                        log.error('query: %s' % bad_query)
+                        log.exception(e)
+                        new_ids = []
+
+                    ids = list(set(ids+new_ids))
+            if wait is 0: break
+            time.sleep(1)
+
+        return ids
+        
+class DownloaderThread(threading.Thread):
+    def __init__(self, q):
+        """make many of these threads.
+        
+        pulls tuples (photo, album_path) from queue to download"""
+        
+        threading.Thread.__init__(self)
+        self.daemon=True
+        self.q = q
+
+    @repeater.repeat
+    def _download(self, web_path):
+        r = requests.get(web_path)
+        return r.content
+    
+    def run(self):
+        while True:
+            photo, path = self.q.get()
+
+            try:
+                save_path = os.path.join(path, photo['path'])
+                web_path = photo['src_big']
+
+                picout = open(save_path, 'wb')
+                log.info('downloading:%s' % web_path)
+                try:
+                    picout.write(self._download(web_path))
+                finally:
+                    picout.close()
+
+                # correct file time
+                created_time = time.strptime(photo['created_time'], '%Y-%m-%dT%H:%M:%S+0000')
+                time_int = int(time.mktime(created_time))
+                os.utime(save_path, (time_int,) * 2)
+            except Exception as e:
+                log.exception(e)
+
+            self.q.task_done()
+
+class DownloadPool(object):
+    def __init__(self):
+        self.q = Queue.Queue()
+
+    def add_thread(self):
+        t=DownloaderThread(self.q)
+        t.start()
+    
+    def get_queue(self):
+        return self.q
+
+    def save_album(self, album, path):
+        # recursively make path
+        # http://serverfault.com/questions/242110/which-common-charecters-are-illegal-in-unix-and-windows-filesystems
+        #
+        # NULL and / are not valid on EXT3
+        # < > : " / \ | ? * are not valid Windows
+        # prohibited characters in order:
+        #   * " : < > ? \ / , NULL
+        #
+        # '\*|"|:|<|>|\?|\\|/|,|'
+        # add . for ... case, windows does not like ellipsis
+        REPLACE_RE = re.compile(r'\*|"|:|<|>|\?|\\|/|,|\.')
+        folder = unicode(album['folder_name'])
+        folder = REPLACE_RE.sub('_', folder)
+        path = os.path.join(path, folder)
+        if not os.path.isdir(path):
+            os.makedirs(path) # recursive makedir
+
+        # save files
+        for photo in album['photos']:
+            # set 'src_big' to largest photo size
+            width = -1
+            for image in photo['images']:
+                if image['width'] > width:
+                    photo['src_big'] = image['source']
+                    width = image['width']
+
+            # filename of photo
+            photo['path'] = '%s' % photo['src_big'].split('/')[-1]
+            photo['path'] = '%s' % photo['path'].split('?')[0] # remove any extra arguement nonsense from end of url
+
+            self.q.put( (photo,path) )
+
+        # save JSON file
+        ts = time.strftime("%y-%m-%d_%H-%M-%S")
+
+        filename = os.path.join(path, 'pg_%s.json' % ts)
+        alfilename = os.path.join(path, 'album.json')
+        htmlfilename = os.path.join(path, 'viewer.html')
+        try:
+            db_file = open(filename, "w")
+            db_file.write("var al = ");
+            json.dump(album, db_file)
+            db_file.write(";\n")
+            db_file.close()
+            shutil.copy(filename, alfilename)
+            template_path = res.getpath('dep/viewer.html')
+            shutil.copy(template_path, htmlfilename)
+        except Exception as e:
+            log.error(e)
+
+class ProcessThread(threading.Thread):
+    def __init__(self, albumgrab, config, pool):
+        threading.Thread.__init__(self)
+        self.daemon=True
+
+        self.albumgrab = albumgrab
+        self.config = config
+        self.pool = pool # downloadpool, must have threads already running
+        self.msg = "Downloading..."
+        self.pics = 0
+        self.total = 0
+
+    def run(self):
         """Collect all necessary information and download all files"""
 
-        savedir = config['dir']
-        targets = config['targets']
-        u = config['u']
-        t = config['t']
-        c = config['c']
-        a = config['a']
+        savedir = self.config['dir']
+        targets = self.config['targets']
+        u = self.config['u']
+        t = self.config['t']
+        c = self.config['c']
+        a = self.config['a']
 
-        self.logger.info("%s" % config)
-
-        import downloader
-        import multiprocessing
-        import os
-        import time
+        log.info("%s" % self.config)
 
         for target in targets:
-            target_info = self.get_info(target)
+            target_info = self.albumgrab.get_info(target)
             data = []
             u_data = []
 
             # get user uploaded photos
             if u:
-                update('Retrieving %s\'s album data...' % target_info['name'])
-                u_data = self.get_albums(target, comments=c)
+                self.msg = 'Retrieving %s\'s album data...' % target_info['name']
+                u_data = self.albumgrab.get_target_albums(target, comments=c)
 
             t_data = []
             # get tagged
             if t:
-                update('Retrieving %s\'s tagged photo data...' % target_info['name'])
-                t_data = self.get_tagged(target, comments=c, full=a)
+                self.msg = 'Retrieving %s\'s tagged photo data...' % target_info['name']
+                t_data = self.albumgrab.get_tagged(target, comments=c, full=a)
 
             if u and t:
                 # list of user ids
@@ -266,32 +608,45 @@ class Helper(object):
 
             data.extend(u_data)
             data.extend(t_data)
-
-            # download data
-            pool = multiprocessing.Pool(processes=5)
-
-            pics = 0
+            
+            # find duplicate album names
             for album in data:
-                pics = pics + len(album['photos'])
+                if 'name' not in album or 'from' not in album:
+                    log.debug('Name not in album: %s' % album)
+                    log.error('name or from not in album')
 
-            update('Downloading %d photos...' % pics)
+            # idea, folder name = album (if from target) otherwise
+            # also, have 'process data, &args' options for get_target_albums, etc so we can download
+            # before waiting on all data
+
+            data = [album for album in data if len(album['photos']) > 0]
+            names = [album['name'] for album in data]
+            duplicate_names = [name for name, count in collections.Counter(names).items() if count > 1]
+            for album in data:
+                if album['name'] in duplicate_names:
+                    album['folder_name'] = '%s - %s' % (album['name'], album['from']['name'])
+                else:
+                    album['folder_name'] = album['name']
+
+            #self.total = 0
+            for album in data:
+                self.total = self.total + len(album['photos'])
+
+            self.msg = 'Downloading %d photos...' % self.total
 
             for album in data:
-                # TODO: Error where 2 albums with same name exist
                 path = os.path.join(savedir,unicode(target_info['name']))
-                pool.apply_async(downloader.save_album,
-                                (album,path,c)
-                                ) #callback=
-            pool.close()
+                self.pool.save_album(album, path)
 
-            self.logger.info('Waiting for childeren to finish')
+            log.info('Waiting for childeren to finish.')
+            
+            self.pool.get_queue().join()
 
-            while multiprocessing.active_children():
-                time.sleep(1)
-            pool.join()
+            log.info('DownloaderThreads completed.')
+            log.info('Albums: %s' % len(data))
+            log.info('Pics: %s' % self.total)
 
-            self.logger.info('Child processes completed')
-            self.logger.info('albums: %s' % len(data))
-            self.logger.info('pics: %s' % pics)
-
-            update('%d photos downloaded!' % pics)
+        self.msg = '%d photos downloaded!' % self.total
+    
+    def status(self):
+        return self.msg

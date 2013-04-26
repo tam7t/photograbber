@@ -1,193 +1,236 @@
-import wx
-from gui.wxFrameLogin import wxFrameLogin
-from gui.wxFrameToken import wxFrameToken
-from gui.wxFrameChooser import wxFrameChooser
-from gui.wxFrameOptions import wxFrameOptions
-from gui.wxFrameDownload import wxFrameDownload
+# -*- coding: utf-8 -*-
+#
+# Copyright (C) 2013 Ourbunny
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Req for building on Win7
+# Python 2.7.3 - win32
+# PySide 1.1.2 win32 py2.7
+# pywin32-218.win32-py2.7
+# PyInstaller
+
+import sys
+from PySide import QtCore, QtGui
+from wizard import Ui_Wizard
+from operator import itemgetter
 
 import facebook
 import helpers
-import downloader
 
 import logging
-import threading
 
+log = logging.getLogger('pg.%s' % __name__)
 
-myEVT_UPDATE_STATUS = wx.NewEventType()
-EVT_UPDATE_STATUS = wx.PyEventBinder(myEVT_UPDATE_STATUS, 1)
+class ControlMainWindow(QtGui.QWizard):
+    def __init__(self, parent=None):
+        super(ControlMainWindow, self).__init__(parent)
+        self.ui =  Ui_Wizard()
+        self.ui.setupUi(self)
 
-class UpdateStatusEvent(wx.PyCommandEvent):
-    """Event to signal a status update is ready"""
-    def __init__(self, etype, eid, value=None):
-        """Creates the event object"""
-        wx.PyCommandEvent.__init__(self, etype, eid)
-        self._value = value
+        # data
+        self.graph = facebook.GraphAPI('')
+        self.graph.start()
+        self.peoplegrab = None
+        self.albumgrab = None
+        self.pool = helpers.DownloadPool()
+        for i in range(15): self.pool.add_thread()
+        self.token = ''
+        self.config = {}
+        self.adv_target = ""
 
-    def GetValue(self):
-        """Returns the value form the event.
+        # connect signals and validate pages
+        self.ui.aboutPushButton.clicked.connect(self.aboutPressed)
+        self.ui.loginPushButton.clicked.connect(self.loginPressed)
+        self.ui.advancedPushButton.clicked.connect(self.advancedPressed)
+        self.ui.browseToolButton.clicked.connect(self.openFolder)
+        self.ui.wizardPageLogin.registerField("token*", self.ui.enterTokenLineEdit)
+        self.ui.wizardPageLogin.validatePage = self.validateLogin
+        self.ui.wizardPageTarget.validatePage = self.validateTarget
+        self.ui.wizardPageLocation.validatePage = self.beginDownload
 
-        @return: the value of this event
-        """
-        return self._value
+    def aboutPressed(self):
+        QtGui.QMessageBox.about(self, "About", "PhotoGrabber v2.100\n(C) 2013 Ourbunny\nGPLv3\n\nphotograbber.org\nView the LICENSE.txt file for full licensing information.")
 
-class ProcessThread(threading.Thread):
-    def __init__(self, parent, config, helper):
-        """
-        @param parent: The gui object that should recieve updates
-        @param config: dictionary of download config
-        @param helper: facebook connnection
-        """
-        threading.Thread.__init__(self)
-        self._parent = parent
-        self._config = config
-        self._helper = helper
-
-    def run(self):
-        """Overrides Thread.run.  Called by Thread.start()."""
-        self._helper.process(self._config, self.update)
-
-    def update(self, text):
-        evt = UpdateStatusEvent(myEVT_UPDATE_STATUS, -1, text)
-        wx.PostEvent(self._parent, evt)
-
-class PhotoGrabberGUI(wx.App):
-    """Control and Data Structure for GUI.
-
-    helper - Instance of the facebook object.  Performs Graph API queries.
-
-    target_list - People/pages to download.
-
-    directory - Location to save files.
-
-    current_frame - Current GUI frame (wxFrame).  The PhotoGrabberGUI object is
-                    passed to the frame to pass data and issue control follow
-                    events.
-
-                    Each frame must implement a Setup() function and call the
-                    appropriate PhotoGrabberGui.to* function to advance to next
-                    frame.
-    """
-
-    logger = logging.getLogger('PhotoGrabberGUI')
-    helper = None
-    current_frame = None
-    target_list = [] # read by GUI to display usernames
-
-    # TODO: document and make more descriptive
-    token = None # authentication token to use
-    targets = [] # what to actually download
-    u = False
-    t = False
-    c = False
-    a = False
-    directory = None # directory to store downloads
-
-    def OnInit(self):
-        wx.InitAllImageHandlers()
-        self.current_frame = wxFrameLogin(None, -1, "")
-        self.current_frame.Setup(self)
-        self.SetTopWindow(self.current_frame)
-        self.current_frame.Show()
-        return 1
-
-    def __nextFrame(self, frame):
-        """Destroy current frame then create and setup the next frame."""
-        self.current_frame.Destroy()
-        self.current_frame = frame
-        self.current_frame.Setup(self)
-        self.SetTopWindow(self.current_frame)
-        self.current_frame.Show()
-
-    def __errorDialog(self, message):
-        msg_dialog = wx.MessageDialog(parent=self.current_frame,
-                                      message=message,
-                                      caption='Error',
-                                      style=wx.OK | wx.ICON_ERROR | wx.STAY_ON_TOP
-                                      )
-        msg_dialog.ShowModal()
-        msg_dialog.Destroy()
-
-
-    # workflow functions (called by frames)
-    #   login window
-    #   token window
-    #   chooser window
-    #   options window
-    #   folder dialog
-    #   download status
-
-    def toToken(self):
+    def loginPressed(self):
         facebook.request_token()
-        self.__nextFrame(wxFrameToken(None, -1, ""))
 
-    def toChooser(self):
-        self.helper = helpers.Helper(facebook.GraphAPI(self.token))
-
-        # CODE BELOW BLOCKS, CREATE WORKER THREAD
-        my_info = self.helper.get_me()
-        if my_info == False:
-            self.logger.error('Provided Token Failed: %s' % self.token)
-            self.__errorDialog('Invalid Token.  Please re-authenticate with Facebook and try again.')
-            return
-
-        self.target_list.append(my_info)
-        self.target_list.extend(self.helper.get_friends('me'))
-        self.target_list.extend(self.helper.get_pages('me'))
-        self.target_list.extend(self.helper.get_subscriptions('me'))
-        # CODE ABOVE BLOCKS, CREAT WORKER THREAD
-
-        # it is possible that there could be multiple 'Tommy Murphy'
-        # make sure to download all different versions that get selected
-
-        self.__nextFrame(wxFrameChooser(None, -1, ""))
-
-    def toOptions(self):
-        if self.targets is None or len(self.targets) == 0:
-            self.__errorDialog('You must select a target.')
+    def advancedPressed(self):
+        self.adv_target, ok = QtGui.QInputDialog.getText(self, "Specify Target", "ID/username of target", text=self.adv_target)
+        if ok:
+            self.ui.targetTreeWidget.setEnabled(False)
         else:
-            self.__nextFrame(wxFrameOptions(None, -1, ""))
+            self.ui.targetTreeWidget.setEnabled(True)
+        
+    def errorMessage(self, error):
+        log.exception(error)
+        QtGui.QMessageBox.critical(self, "Error", '%s' % error)
+    
+    def validateLogin(self):
+        # present progress modal
+        progress = QtGui.QProgressDialog("Logging in...", "Abort", 0, 0, parent=self)
+        #QtGui.qApp.processEvents() is unnecessary when dialog is Modal
+        progress.setWindowModality(QtCore.Qt.WindowModal)
+        progress.show()
 
-    def toFolder(self):
-        dir_dialog = wx.DirDialog(parent=self.current_frame,
-                                  message="Choose a directory:",
-                                  style=wx.DD_DEFAULT_STYLE
-                                  )
+        self.token = self.ui.enterTokenLineEdit.text()
+        
+        # allow user to specify debug mode
+        if self.token.endswith(":debug"):
+            logging.getLogger("pg").setLevel(logging.DEBUG)
+            log.info('DEBUG mode enabled.')
+            self.token = self.token.split(":debug")[0]
+        if self.token.endswith(":info"):
+            logging.getLogger("pg").setLevel(logging.INFO)
+            log.info('INFO mode enabled.')
+            self.token = self.token.split(":info")[0]
 
-        if dir_dialog.ShowModal() == wx.ID_OK:
-            self.directory = dir_dialog.GetPath()
-            self.logger.info("Download Directory: %s" % self.directory)
-            dir_dialog.Destroy()
-            self.toDownload()
-        else:
-            self.logger.error("Download Directory: None")
-            dir_dialog.Destroy()
-            # let user know they have to select a directory
-            self.__errorDialog('You must choose a directory.')
+        try:
+            if not self.token.isalnum(): raise Exception("Please insert a valid token.")
+            self.graph.set_token(self.token)
+            
+            # ensure token is removed from logs...
+            log.info('Provided token: %s' % self.token)
+            
+            self.peoplegrab = helpers.PeopleGrabber(self.graph)
+            self.albumgrab = helpers.AlbumGrabber(self.graph)
+        except Exception as e:
+            progress.close()
+            self.errorMessage(e)
+            return False
 
-    def toDownload(self):
-        self.__nextFrame(wxFrameDownload(None, -1, ""))
-        self.current_frame.Begin()
+        data =  {}
+        
+        requests = []
+        requests.append({'path':'me'})
+        requests.append({'path':'me/friends'})
+        requests.append({'path':'me/likes'})
+        requests.append({'path':'me/subscribedto'})
+        
+        rids = self.graph.make_requests(requests)
+        while self.graph.requests_active(rids):
+            QtGui.qApp.processEvents()
+            if progress.wasCanceled():
+                progress.close()
+                return False
+        
+        try:
+            data['my_info'] = self.graph.get_data(rids[0])
+            data['friends'] = sorted(self.graph.get_data(rids[1]), key=itemgetter('name'))
+            data['likes'] = sorted(self.graph.get_data(rids[2]), key=itemgetter('name'))
+            data['subscriptions'] = sorted(self.graph.get_data(rids[3]), key=itemgetter('name'))
+        except Exception as e:
+            progress.close()
+            self.errorMessage(e)
+            return False
+        
+        # clear list
+        self.ui.targetTreeWidget.topLevelItem(0).takeChildren()
+        self.ui.targetTreeWidget.topLevelItem(1).takeChildren()
+        self.ui.targetTreeWidget.topLevelItem(2).takeChildren()
+        
+        # populate list
+        item = QtGui.QTreeWidgetItem()
+        item.setText(0, data['my_info']['name'])
+        item.setData(1, 0, data['my_info'])
+        self.ui.targetTreeWidget.topLevelItem(0).addChild(item)
+        
+        for p in data['friends']:
+            item = QtGui.QTreeWidgetItem()
+            item.setText(0, p['name'])
+            item.setData(1, 0, p)
+            self.ui.targetTreeWidget.topLevelItem(0).addChild(item)
 
-    def beginDownload(self, update):
-        # TODO: problem - GUI blocked on this
-        # process each target
+        for p in data['likes']:
+            item = QtGui.QTreeWidgetItem()
+            item.setText(0, p['name'])
+            item.setData(1, 0, p)
+            self.ui.targetTreeWidget.topLevelItem(1).addChild(item)
 
-        config = {}
-        config['dir'] = self.directory
-        config['targets'] = self.targets
-        config['u'] = self.u
-        config['t'] = self.t
-        config['c'] = self.c
-        config['a'] = self.a
+        for p in data['subscriptions']:
+            item = QtGui.QTreeWidgetItem()
+            item.setText(0, p['name'])
+            item.setData(1, 0, p)
+            self.ui.targetTreeWidget.topLevelItem(2).addChild(item)
 
-        self.Bind(EVT_UPDATE_STATUS, update)
+        progress.close()
+        return True
+    
+    def validateTarget(self):
+        # setup next page to current directory
+        self.config['dir'] = QtGui.QFileDialog().directory().absolutePath()
+        self.ui.pathLineEdit.setText(self.config['dir'])
+        
+        self.config['u'] = self.ui.allAlbumsCheckBox.isChecked()
+        self.config['t'] = self.ui.allPhotosCheckBox.isChecked()
+        self.config['c'] = self.ui.commentsCheckBox.isChecked()
+        self.config['a'] = self.ui.fullAlbumsCheckBox.isChecked()
+        
+        # ensure check boxes will work
+        if not self.config['t'] and not self.config['u']:
+            QtGui.QMessageBox.warning(self, "PhotoGrabber", "Invalid option combination, please choose to download tagged photos or uploaded albums.")
+            return False
 
-        worker = ProcessThread(self, config, self.helper)
-        worker.start()
+        # make sure a real item is selected
+        self.config['targets'] = []
+        if not self.ui.targetTreeWidget.isEnabled():
+            self.config['targets'].append(self.adv_target)
+            #get info on target?
+            return True
+            
+        for i in self.ui.targetTreeWidget.selectedItems():
+            if i.data(1,0) is not None: self.config['targets'].append(i.data(1,0)['id'])
 
-# end of class PhotoGrabberGUI
+        if len(self.config['targets']) > 0: return True
+            
+        QtGui.QMessageBox.warning(self, "PhotoGrabber", "Please select a valid target")
+        return False
+
+    def openFolder(self):
+        dialog = QtGui.QFileDialog()
+        dialog.setFileMode(QtGui.QFileDialog.Directory)
+        dialog.setOption(QtGui.QFileDialog.ShowDirsOnly)
+        if dialog.exec_():
+            self.config['dir'] = dialog.selectedFiles()[0]
+            self.ui.pathLineEdit.setText(self.config['dir'])
+
+    def beginDownload(self):
+        # present progress modal
+        total = len(self.config['targets'])
+        progress = QtGui.QProgressDialog("Downloading...", "Abort", 0, 0, parent=self)
+        progress.setWindowModality(QtCore.Qt.WindowModal)
+        progress.show()
+        
+        # processing heavy function
+        thread = helpers.ProcessThread(self.albumgrab, self.config, self.pool)
+        thread.start()
+        
+        while thread.isAlive():
+            QtGui.qApp.processEvents()
+            #progress.setLabelText(thread.status())
+            if progress.wasCanceled():
+                sys.exit()
+        
+        #progress.setValue(total)
+        #progress.setLabelText(thread.status())
+        #QtGui.QMessageBox.information(self, "Done", "Download is complete.")
+        QtGui.QMessageBox.information(self, "Done", thread.status())
+        progress.close()
+        return True
 
 def start():
-    #PhotoGrabber = PhotoGrabberGUI(redirect=True, filename=None) # replace with 0 to use pdb
-    PhotoGrabber = PhotoGrabberGUI(0)
-    PhotoGrabber.MainLoop()
+    app = QtGui.QApplication(sys.argv)
+    mySW = ControlMainWindow()
+    mySW.show()
+    sys.exit(app.exec_())
