@@ -1,115 +1,173 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
   <head>
-    <meta charset='utf-8' />
-    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
-    <meta name="description" content="PhotoGrabber : Download photos from Facebook" />
-
-    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
-
+    <meta charset="utf-8">
     <title>PhotoGrabber</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <style type="text/css">
+      body {
+        padding-top: 20px;
+        padding-bottom: 40px;
+      }
+
+      /* Custom container */
+      .container-narrow {
+        margin: 0 auto;
+        max-width: 700px;
+      }
+      .container-narrow > hr {
+        margin: 30px 0;
+      }
+
+      /* Main marketing message and sign up button */
+      .jumbotron {
+        margin: 60px 0;
+        text-align: center;
+      }
+      .jumbotron h1 {
+        font-size: 72px;
+        line-height: 1;
+      }
+      .jumbotron .btn {
+        font-size: 21px;
+        padding: 14px 24px;
+      }
+
+      /* Supporting marketing content */
+      .marketing {
+        margin: 60px 0;
+      }
+      .marketing p + h4 {
+        margin-top: 28px;
+      }
+      
+      .tour-img {
+      	margin-bottom: 30px;
+      	margin-top: 30px;
+      	text-align: center;
+      }
+    </style>
+    <link href="css/bootstrap-responsive.min.css" rel="stylesheet">
   </head>
 
   <body>
 
-    <!-- HEADER -->
-    <div id="header_wrap" class="outer">
-        <header class="inner">
-          <a id="forkme_banner" href="https://github.com/tam7t/photograbber">View on GitHub</a>
+    <div class="container-narrow">
 
-          <h1 id="project_title">PhotoGrabber</h1>
-          <h2 id="project_tagline">Download photos from Facebook</h2>
+      <div class="masthead">
+        <h3 class="muted">PhotoGrabber</h3>
+      </div>
 
-            <section id="downloads">
-              <a class="zip_download_link" href="https://github.com/tam7t/photograbber/zipball/master">Download this project as a .zip file</a>
-              <a class="tar_download_link" href="https://github.com/tam7t/photograbber/tarball/master">Download this project as a tar.gz file</a>
-            </section>
-        </header>
-    </div>
+      <hr>
 
-    <!-- MAIN CONTENT -->
-    <div id="main_content_wrap" class="outer">
-      <section id="main_content" class="inner">
-        <h3>Usage</h3>
+      <div class="jumbotron">
+        <h1>Grab your photos.</h1>
+        <p><img src="tour-img/pg-250.png"/></p>
+        <p class="lead">PhotoGrabber is the <strong>best</strong> Facebook photo downloading utility.</p>
+        <a class="btn btn-large btn-primary" href="download.html">Download PhotoGrabber!</a> <a class="btn btn-large btn-success" href="#tour">Take the Tour</a>
+      </div>
 
-<pre><code>$ ./pg.py 
-Open Browser [y/n]: y
-Created new window in existing browser session.
-Enter Token: *** REDACTED
-Download Location [/home/tam7t/photograbber]: 
-Target: me
+      <hr>
 
-Options
--------
-u: Download all albums uploaded by the targets. (Use with --target)
-t: Download all photos with the target tagged. (Use with --target)
-c: Download full comment data. (Use with --target)
-a: Download full album, even if just 1 photo has the tagged target. (Use with --target)
-Input Options (e.g. 'cau' or 'caut'):utca               
-Retrieving me's album data...
-Retrieving me's tagged photo data...
-Downloading photos
-Complete!
-</code></pre>
+      <div class="row-fluid marketing">
+        <div class="span6">
+          <h4>Easy</h4>
+          <ul>
+          	<li>Simple to follow step-by-step wizard</li>
+          	<li>Organizes photos by user and album</li>
+          	<li>Downloads highest resolution available</li>
+          </ul>
 
-<h3>Arguments</h3>
+          <h4>Secure</h4>
+          <ul>
+          	<li>Uses the official <a href="privacy.html">Facebook API</a></li>
+          	<li>No third party middleman</li>
+          	<li>HTTPS certificate validation</li>
+          </ul>
+        </div>
 
-<pre><code>$ ./pg.py --help
-usage: pg.py [-h] [--token TOKEN]
-             [--list-targets {me,friends,pages,following,all}]
-             [--list-albums LIST_ALBUMS [LIST_ALBUMS ...]]
-             [--target TARGET [TARGET ...]] [-u] [-t] [-c] [-a]
-             [--album ALBUM [ALBUM ...]] [--dir DIR] [--debug {info,debug}]
+        <div class="span6">
+          <h4>Awesome</h4>
+          <ul>
+          	<li>Tagged photos</li>
+          	<li>Uploaded albums</li>
+          	<li>Tags, comments, likes, oh my!</li>
+          </ul>
 
-Download Facebook photos.
+          <h4>Free & Open</h4>
+          <ul>
+          	<li>Open Source (<a href="https://www.gnu.org/licenses/gpl-3.0.html">GPLv3</a>)</li>
+          	<li>Support for: Windows, OSX, Linux</li>
+          	<li>Audit, alter, contribute</li>
+          </ul>
 
-optional arguments:
-  -h, --help            show this help message and exit
-  --token TOKEN         Specify the OAuth token used to authenticate with
-                        Facebook.
-  --list-targets {me,friends,pages,following,all}
-                        Display names and object_id's of potential targets
-  --list-albums LIST_ALBUMS [LIST_ALBUMS ...]
-                        List the albums uploaded by a target. Separate the
-                        object_id's of targets with spaces.
-  --target TARGET [TARGET ...]
-                        Download targets. Separate the object_id's of people
-                        or pages with spaces.
-  -u                    Download all albums uploaded by the targets. (Use with
-                        --target)
-  -t                    Download all photos with the target tagged. (Use with
-                        --target)
-  -c                    Download full comment data. (Use with --target)
-  -a                    Download full album, even if just 1 photo has the
-                        tagged target. (Use with --target)
-  --album ALBUM [ALBUM ...]
-                        Download full albums. Separate the object_id's of the
-                        albums with spaces.
-  --dir DIR             Specify the directory to store the downloaded
-                        information. (Use with --target or --album)
-  --debug {info,debug}  Log extra debug information to pg.log
-</code></pre>
+        </div>
+      </div>
 
-<h3>Authors and Contributors</h3>
+      <hr>
+      
+      <section id="tour">
+      <div>
+        <h1>Login</h1>
+        <p>Open PhotoGrabber and press <code>Login</code>:</p>
+        <p class="tour-img"><img src="tour-img/1.png"/></p>
+        <p>Your default web browser will direct you to Facebook to accept the PhotoGrabber permissions prompt:</p>
+        <p class="tour-img"><img src="tour-img/2.png"/></p>
+      </div>
+      
+      <hr>
 
-<p>PhotoGrabber is created and maintained by Tommy Murphy (<a href="https://github.com/tam7t" class="user-mention">@tam7t</a>).  The original idea for PhotoGrabber came from a script by <a href="https://github.com/seancolyer" class="user-mention">@seancolyer</a>.  The first generation version of PhotoGrabber included a major contribution by [Bryce Boe] that added capability to download full albums and photo metadata including comments.</p>
-
-<h3>Support or Contact</h3>
-
-<p>Having trouble with PhotoGrabber? Submit a ticket to Issue tracker.</p>
+      <div>
+        <h1>Enter your token</h1>
+        <p>Copy the token displayed on your web browser into the token text box and click <code>Next</code>.</p>
+        <p class="tour-img"><img src="tour-img/3.png"/></p>
+        <p><span class="label label-info"><i class="icon-thumbs-up icon-white"></i> Pro-tip</span> If you encounter errors, enter <code>:info</code> or <code>:debug</code> after your token and include the <code>pg.log</code> file when submitting a bug report.</p>
+      </div>
+      
+      <hr>
+      
+      <div>
+        <h1>Choose your target(s)</h1>
+        <p>and select what you want to download.</p>
+        <p class="tour-img"><img src="tour-img/4.png"/></p>
+        <p><span class="label label-info"><i class="icon-thumbs-up icon-white"></i> Pro-tip</span> click <code>Advanced</code> to download a target (person or page) who is not your friend.</p>
+      </div>
+      
+      <hr>
+      
+      <div>
+        <h1>Choose a download location</h1>
+        <p class="tour-img"><img src="tour-img/5.png"/></p>
+        <p><span class="label label-success">New</span> Now with unicode filesystem support!</p>
+      </div>
+      
+      <hr>
+      
+      <div>
+        <h1>Your photos will be ready shortly!</h1>
+        <p class="tour-img"><img src="tour-img/6.png"/></p>
+        <p class="tour-img"><img src="tour-img/7.png"/></p>
+        <p><span class="label label-important"><i class="icon-exclamation-sign icon-white"></i> Error</span>  If fewer photos are downloaded than expected, please <a href="known-issues.html">read this</a>.</p>
+      </div>
       </section>
-    </div>
+      
+      <hr>
 
-    <!-- FOOTER  -->
-    <div id="footer_wrap" class="outer">
-      <footer class="inner">
-        <p class="copyright">PhotoGrabber maintained by <a href="https://github.com/tam7t">tam7t</a></p>
-        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
-      </footer>
-    </div>
+      <div class="footer">
+        <p>&copy; <a href='http://www.ourbunny.com'>ourbunny</a> 2013</p>
+      </div>
 
-    
+    </div> <!-- /container -->
 
+    <a href="https://github.com/tam7t/photograbber"><img style="position: absolute; top: 0; right: 0; border: 0;" src="tour-img/forkme.png" alt="Fork me on GitHub"></a>
+
+    <!-- Le javascript
+    ================================================== -->
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script src="js/jquery.js"></script>
+    <script src="js/bootstrap.min.js"></script>
   </body>
 </html>
