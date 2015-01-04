@@ -316,9 +316,7 @@ def request_token():
     CLIENT_ID = "139730900025"
     RETURN_URL = "https://faceauth.appspot.com/?version=2200"
     SCOPE = ''.join(['user_photos,',
-                     'friends_photos,',
-                     'user_likes,',
-                     'user_subscriptions',])
+                     'user_likes,',])
 
     url = ''.join(['https://www.facebook.com/v2.2/dialog/oauth?',
                    'client_id=%(cid)s&',
