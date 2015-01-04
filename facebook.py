@@ -40,7 +40,7 @@ class GraphBuilder(object):
         #   args["limit"] = limit
         args["access_token"] = self.access_token
 
-        path = ''.join(["https://graph.facebook.com/",
+        path = ''.join(["https://graph.facebook.com/v2.2/",
                         path])
 
         return path, args
@@ -314,13 +314,13 @@ def request_token():
     import webbrowser
 
     CLIENT_ID = "139730900025"
-    RETURN_URL = "https://faceauth.appspot.com/?version=2100"
+    RETURN_URL = "https://faceauth.appspot.com/?version=2200"
     SCOPE = ''.join(['user_photos,',
                      'friends_photos,',
                      'user_likes,',
                      'user_subscriptions',])
 
-    url = ''.join(['https://graph.facebook.com/oauth/authorize?',
+    url = ''.join(['https://www.facebook.com/v2.2/dialog/oauth?',
                    'client_id=%(cid)s&',
                    'redirect_uri=%(rurl)s&',
                    'scope=%(scope)s&',
