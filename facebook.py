@@ -112,8 +112,8 @@ class GraphRequestHandler(threading.Thread):
             retVal = self.graph_builder.parse(response, r.url)
         except GraphAPIError as e:
             # https://developers.facebook.com/docs/reference/api/errors/
-            # do not try on OAuth errors
-            if e.code is 190:
+            # do not try on OAuth errors (190) or Unsupported get request (100)
+            if e.code is 190 or 100:
                 raise repeater.DoNotRepeatError(e)
             # API Too Many Calls (server side throttling)
             # API User Too Many Calls
