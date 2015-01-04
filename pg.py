@@ -55,7 +55,7 @@ def main():
     parser = argparse.ArgumentParser(description="Download photos from Facebook.")
     parser.add_argument('--cmd', action='store_true', help=helps['cmd'])
     parser.add_argument('--token', help=helps['token'])
-    parser.add_argument('--list-targets', choices=('me','friends','likes','following','all'), help=helps['list-targets'])
+    parser.add_argument('--list-targets', choices=('me','friends','likes','all'), help=helps['list-targets'])
     parser.add_argument('--list-albums', nargs='+', help=helps['list-albums'])
     parser.add_argument('--target', nargs='+', help=helps['target'])
     parser.add_argument('-u', action='store_true', help=helps['u'])
@@ -121,7 +121,7 @@ def main():
         print 'Provided Token Failed: OAuthException'
         exit()
 
-    # --list-targets {'me','friends','likes','following','all'}
+    # --list-targets {'me','friends','likes','all'}
     target_list = []
     if args.list_targets == 'me':
         target_list.append(my_info)
@@ -129,13 +129,10 @@ def main():
         target_list.extend(peoplegrab.get_friends('me'))
     elif args.list_targets == 'likes':
         target_list.extend(peoplegrab.get_likes('me'))
-    elif args.list_targets == 'following':
-        target_list.extend(peoplegrab.get_subscriptions('me'))
     elif args.list_targets == 'all':
         target_list.append(my_info)
         target_list.extend(peoplegrab.get_friends('me'))
         target_list.extend(peoplegrab.get_likes('me'))
-        target_list.extend(peoplegrab.get_subscriptions('me'))
 
     if args.list_targets is not None:
         log.info('Listing available targets.')

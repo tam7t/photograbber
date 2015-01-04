@@ -149,7 +149,6 @@ class Ui_Wizard(object):
         self.targetTreeWidget.setSortingEnabled(False)
         self.targetTreeWidget.topLevelItem(0).setText(0, QtGui.QApplication.translate("Wizard", "Friends", None, QtGui.QApplication.UnicodeUTF8))
         self.targetTreeWidget.topLevelItem(1).setText(0, QtGui.QApplication.translate("Wizard", "Likes", None, QtGui.QApplication.UnicodeUTF8))
-        self.targetTreeWidget.topLevelItem(2).setText(0, QtGui.QApplication.translate("Wizard", "Following", None, QtGui.QApplication.UnicodeUTF8))
         self.targetTreeWidget.setSortingEnabled(__sortingEnabled)
         self.allPhotosCheckBox.setText(QtGui.QApplication.translate("Wizard", "All tagged photos", None, QtGui.QApplication.UnicodeUTF8))
         self.fullAlbumsCheckBox.setText(QtGui.QApplication.translate("Wizard", "Full albums of tagged photos", None, QtGui.QApplication.UnicodeUTF8))

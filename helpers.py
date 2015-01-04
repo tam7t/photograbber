@@ -48,13 +48,6 @@ class PeopleGrabber(object):
             time.sleep(1)
         a = self.graph.get_data(rid)
         return a
-
-    def get_subscriptions(self, id):
-        request = {'path':'%s/subscribedto' % id}
-        rid = self.graph.make_request(request)
-        while self.graph.request_active(rid):
-            time.sleep(1)
-        return self.graph.get_data(rid)
         
     def get_likes(self, id):
         request = {'path':'%s/likes' % id}
